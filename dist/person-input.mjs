@@ -8,3 +8,6 @@ export function imageTensor(rgba){
  for(let i=0;i<n;i++)for(let c=0;c<3;c++)data[c*n+i]=rgba[i*4+c]/255;
  return data;
 }
+export function modelPoint(xy,index,rect){
+ return [rect[0]+xy[index*2]*rect[2],rect[1]+xy[index*2+1]*rect[3]];
+}

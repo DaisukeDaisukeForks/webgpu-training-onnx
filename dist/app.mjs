@@ -4,7 +4,7 @@ import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 import {VRMLoaderPlugin,VRMUtils} from '@pixiv/three-vrm';
 import {convertCheckpoint} from './checkpoint.mjs';
 import {matchDetections,trackVisibility,collectFrame} from './tracking.mjs';
-import {personRect,imageTensor} from './person-input.mjs';
+import {personRect,imageTensor,modelPoint} from './person-input.mjs';
 const $=id=>document.getElementById(id),video=$('video'),overlay=$('overlay'),ctx=overlay.getContext('2d');
 const palette=[0x91efc5,0x72b5ff,0xffb16e,0xd59fff,0xff8caa,0xffe282];
 const edges=[[0,1],[0,2],[2,4],[1,3],[3,5],[0,6],[1,7],[6,7],[6,8],[8,10],[7,9],[9,11],[10,52],[10,53],[10,54],[11,55],[11,56],[11,57],[58,60],[59,60],[61,62],[65,66],[69,70],[71,72]];
@@ -48,6 +48,15 @@ $('checkpoint').onchange=async e=>{const file=e.target.files[0];if(!file)return;
 $('download').onclick=()=>{if(!modelBytes)return;const url=URL.createObjectURL(new Blob([modelBytes],{type:'application/octet-stream'})),a=document.createElement('a');a.href=url;a.download='wholebody73.onnx';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
 $('videoFile').onchange=async e=>{const file=e.target.files[0];if(!file)return;stop();while(busy)await new Promise(r=>setTimeout(r,20));clearTracks();if(videoURL)URL.revokeObjectURL(videoURL);videoURL=URL.createObjectURL(file);video.src=videoURL;lastTime=-1;video.load();ready();};
 video.onloadeddata=()=>{overlay.width=video.videoWidth;overlay.height=video.videoHeight;$('empty').hidden=true;ready();};video.onerror=()=>fail(Error('この動画をブラウザで再生できません'));video.onseeking=()=>{lastTime=-1;clearTracks();};video.onended=()=>{running=false;loopGeneration++;$('run').textContent='推論開始';};
+async function inferPausedFrame(){
+ const generation=frameGeneration;
+ while(busy)await new Promise(r=>setTimeout(r,15));
+ if(generation!==frameGeneration||video.seeking||!video.paused||$('checkpoint').disabled)return;
+ if(video.currentTime!==lastTime)await infer();
+}
+video.onpause=()=>{if(!running)return;loopGeneration++;void inferPausedFrame();};
+video.onplay=()=>{if(running)loop(++loopGeneration);};
+video.onseeked=()=>{if(video.paused)void inferPausedFrame();};
 // A VRM is parsed locally for every tracked person; no file or texture is sent.
 async function attachVRM(t){if(!vrmBytes||t.vrmLoading)return;const gen=vrmGeneration;t.vrmLoading=true;try{
  const loader=new GLTFLoader();loader.register(p=>new VRMLoaderPlugin(p));
@@ -95,13 +104,28 @@ function updateGeometry(t){
  lines.needsUpdate=true;points.needsUpdate=true;t.lines.geometry.setDrawRange(0,l/3);t.points.geometry.setDrawRange(0,p/3);
  t.group.position.copy(root);poseVRM(t,positions,root);
 }
+function drawPose2d(c,pose,rect){
+ const threshold=+$('jointScore').value;
+ for(const [a,b]of edges)if(pose.conf[a]>=threshold&&pose.conf[b]>=threshold){c.beginPath();c.moveTo(...modelPoint(pose.xy,a,rect));c.lineTo(...modelPoint(pose.xy,b,rect));c.stroke();}
+}
+function renderInputPreviews(){
+ const previews=document.createDocumentFragment();
+ for(const t of tracks)if(t.group.visible&&t.lastPose){
+  const item=document.createElement('figure'),label=document.createElement('figcaption'),canvas=document.createElement('canvas');
+  label.textContent=`ID ${t.id}${t.missed?' · 保持中':''}`;canvas.width=192;canvas.height=256;
+  const c=canvas.getContext('2d');c.putImageData(t.lastPose.preview,0,0);
+  if($('previewSkeleton').checked){c.strokeStyle='#'+t.color.toString(16).padStart(6,'0');c.lineWidth=1.2;drawPose2d(c,t.lastPose,[0,0,192,256]);}
+  item.append(label,canvas);previews.append(item);
+ }
+ $('modelInputs').replaceChildren(previews);
+}
+$('previewSkeleton').onchange=renderInputPreviews;
 function drawPerson(t,held,cards){
  const {xy,conf,rect,z,raw}=t.lastPose,c=bufferCtx,threshold=+$('jointScore').value;
  c.save();c.globalAlpha=held?.45:1;c.setLineDash(held?[8,6]:[]);
  c.strokeStyle='#'+t.color.toString(16).padStart(6,'0');c.fillStyle=c.strokeStyle;c.lineWidth=Math.max(2,video.videoWidth/500);c.strokeRect(...t.box);
  c.font=`${Math.max(16,video.videoWidth/55)}px system-ui`;c.fillText(`ID ${t.id}${held?' 保持中':''}`,t.box[0],Math.max(20,t.box[1]-6));
- const point=j=>[rect[0]+xy[j*2]*rect[2],rect[1]+xy[j*2+1]*rect[3]];
- for(const [a,b]of edges)if(conf[a]>=threshold&&conf[b]>=threshold){c.beginPath();c.moveTo(...point(a));c.lineTo(...point(b));c.stroke();}
+ drawPose2d(c,t.lastPose,rect);
  const card=document.createElement('div');card.className='person';card.style.borderColor=c.strokeStyle;card.style.opacity=held?'.5':'1';
  const zs=raw.filter((_,i)=>i%3===2);card.textContent=`ID ${t.id}${held?' · 保持中':''} · 距離の目安 ${z.toFixed(2)}m · 腰からの奥行き ${Math.min(...zs).toFixed(2)}〜${Math.max(...zs).toFixed(2)}m`;cards.append(card);c.restore();
 }
@@ -112,6 +136,7 @@ function expireHeldVisuals(now){
  const cards=document.createDocumentFragment();bufferCtx.clearRect(0,0,overlayBuffer.width,overlayBuffer.height);
  for(const t of tracks)if(t.group.visible&&t.lastPose)drawPerson(t,!!t.missed,cards);
  ctx.clearRect(0,0,overlay.width,overlay.height);ctx.drawImage(overlayBuffer,0,0);$('people').replaceChildren(cards);
+ renderInputPreviews();
 }
 function commitFrame(results,started,frameTime){
  const now=performance.now(),seen=new Set(),cards=document.createDocumentFragment();
@@ -131,9 +156,7 @@ function commitFrame(results,started,frameTime){
  // complete frame. Browsers never present an empty or partially rebuilt pose.
  ctx.clearRect(0,0,overlay.width,overlay.height);ctx.drawImage(overlayBuffer,0,0);$('people').replaceChildren(cards);
  $('status').textContent=`${results.length}人${heldCount?` + 保持${heldCount}人`:''} · ${(now-started).toFixed(0)} ms / frame`;lastTime=frameTime;
- const previews=document.createDocumentFragment();
- for(const t of tracks)if(t.group.visible&&t.lastPose){const item=document.createElement('figure'),label=document.createElement('figcaption'),canvas=document.createElement('canvas');label.textContent=`ID ${t.id}${t.missed?' · 保持中':''}`;canvas.width=192;canvas.height=256;canvas.getContext('2d').putImageData(t.lastPose.preview,0,0);item.append(label,canvas);previews.append(item);}
- $('modelInputs').replaceChildren(previews);
+ renderInputPreviews();
 }
 async function infer(){
  if(busy||!session||!detector||video.readyState<2||video.seeking)return;
@@ -148,5 +171,5 @@ async function infer(){
  }catch(e){stop();fail(e);}finally{busy=false;}
 }
 async function loop(generation){if(!running||generation!==loopGeneration)return;if(video.ended){stop();return;}if(video.currentTime!==lastTime)await infer();if(running&&generation===loopGeneration)requestAnimationFrame(()=>loop(generation));}
-$('run').onclick=async()=>{if(running){stop();return;}const generation=++loopGeneration;try{await video.play();if(generation!==loopGeneration)return;running=true;$('run').textContent='推論停止';loop(generation);}catch(e){fail(e);}};
+$('run').onclick=async()=>{if(running){stop();await inferPausedFrame();return;}const generation=++loopGeneration;try{await video.play();if(generation!==loopGeneration)return;running=true;$('run').textContent='推論停止';loop(generation);}catch(e){fail(e);}};
 $('single').onclick=async()=>{stop();while(busy)await new Promise(r=>setTimeout(r,20));await infer();};
