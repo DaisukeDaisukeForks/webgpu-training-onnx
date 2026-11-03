@@ -1,6 +1,6 @@
 import {WB73} from './model.mjs?revision=7';import {Dataset,Data3D,crop,batch2d,rng,shuffle} from './data.mjs?revision=12';import {SPEC,GROUPS,NAMES} from './schema.mjs';
 import {mountVideo} from './video-workflow.mjs?revision=12';
-import {stableStep} from './gradients.mjs?revision=7';
+import {stableStep} from './gradients.mjs?revision=13';
 import {recoverCheckpoint,readCheckpoint} from './recovery.mjs?revision=7';
 import {publishModel} from './publish.mjs?revision=12';
 import {teachers} from './teacher-cache.mjs?revision=12';
