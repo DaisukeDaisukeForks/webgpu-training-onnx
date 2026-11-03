@@ -1,23 +1,26 @@
 // Keep reductions and the clipping coefficient on the GPU. A normal update
-// reads one packed pre-update summary and one post-update validity flag.
+// reads the numeric summary and boolean flags concurrently, then checks updated weights.
 export async function stableStep(tf,fn,vars,optimizer,apply=true){
- let result,summary,factor;
+ let result,summary,validity,factor;
  try{
   result=tf.variableGrads(fn,vars);
   const entries=Object.entries(result.grads);
-  ({summary,factor}=tf.tidy(()=>{
+  ({summary,validity,factor}=tf.tidy(()=>{
    const peak=tf.stack(entries.map(([,v])=>v.abs().max())).max();
    const divisor=tf.where(peak.greater(0),peak,tf.scalar(1));
    const squared=tf.addN(entries.map(([,v])=>v.div(divisor).square().sum()));
    // For a nonzero gradient, the scaled squared norm is at least one.
    // Divide in two stages: peak * sqrt(squared) can overflow for finite grads.
    const factor=tf.scalar(1).div(divisor).div(squared.maximum(1).sqrt()).minimum(1);
-   const flags=entries.map(([,v])=>tf.isFinite(v).all().cast('float32'));
-   return{factor,summary:tf.stack([result.value,peak,squared,factor,...flags])};
+   // Keep boolean storage separate: cast() may retain the underlying bool buffer.
+   // Submit both readbacks together below, without an intermediate CPU barrier.
+   const validity=tf.stack(entries.map(([,v])=>tf.isFinite(v).all()));
+   return{factor,validity,summary:tf.stack([result.value,peak,squared,factor])};
   }));
-  const values=await summary.data(),[loss,peak,squared,coefficient]=values;
+  const [values,flags]=await Promise.all([summary.data(),validity.data()]);
+  const [loss,peak,squared,coefficient]=values;
   if(!Number.isFinite(loss))throw Error('損失が非有限値です。重みは更新していません。');
-  const bad=entries.filter((_,i)=>!values[i+4]).map(([name])=>name);
+  const bad=entries.filter((_,i)=>!flags[i]).map(([name])=>name);
   if(bad.length)throw Error('非有限の勾配: '+bad.slice(0,6).join(', ')+'。重みは更新していません。');
   if(!Number.isFinite(peak)||!Number.isFinite(squared)||!Number.isFinite(coefficient))throw Error('勾配ノルム計算が非有限値です。重みは更新していません。');
   if(!apply)return loss;
@@ -41,7 +44,7 @@ export async function stableStep(tf,fn,vars,optimizer,apply=true){
   }finally{before.forEach(v=>v.dispose());adam.forEach(w=>w.tensor.dispose());}
   return loss;
  }finally{
-  summary?.dispose();factor?.dispose();
+  summary?.dispose();validity?.dispose();factor?.dispose();
   if(result){result.value.dispose();Object.values(result.grads).forEach(t=>t.dispose());}
  }
 }
