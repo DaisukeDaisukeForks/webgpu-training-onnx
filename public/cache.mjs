@@ -1,3 +1,4 @@
+import {prefetchAll} from './prefetch.mjs?revision=8';
 export const SELECTED=[0,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,92,93,95,96,97,99,100,101,103,104,105,107,108,109,111,113,114,116,117,118,120,121,122,124,125,126,128,129,130,132,60,64,67,69,71,77,85,89,25,37];
 export function rng(seed){return()=>{seed|=0;seed=seed+0x6D2B79F5|0;let t=Math.imul(seed^seed>>>15,1|seed);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
 export function shuffle(a,r){for(let i=a.length-1;i>0;i--){const j=Math.floor(r()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
@@ -15,16 +16,18 @@ export class Dataset{
  }
  disk(mode,key,value){return new Promise((resolve,reject)=>{const tx=this.db.transaction('images',mode==='put'?'readwrite':'readonly'),store=tx.objectStore('images');const r=mode==='put'?store.put(value,key):mode==='keys'?store.getAllKeys():store.get(key);let result;r.onsuccess=()=>{result=r.result;};tx.oncomplete=()=>resolve(result);tx.onabort=()=>reject(tx.error||Error('画像キャッシュ保存が中断されました'));tx.onerror=()=>reject(tx.error);});}
  url(r){return new URL(`./api/images/${r.split}/${String(r.id).padStart(12,'0')}.jpg`,location.href).href;}
- async image(r,signal){
-  if(signal?.aborted)throw new DOMException('Stopped','AbortError');const url=this.url(r);
+ async image(r,signal,{cacheOnly=true}={}){
+  if(signal?.aborted)throw new DOMException('Stopped','AbortError');const url=this.url(r),key=`${cacheOnly?'cache':'download'}:${url}`;
   // A second request for the same image shares its ongoing download.
-  if(this.pending.has(url))return this.pending.get(url);
-  const work=this.load(url,signal);this.pending.set(url,work);try{return await work;}finally{this.pending.delete(url);}
+  if(this.pending.has(key))return this.pending.get(key);
+  const work=this.load(url,signal,cacheOnly);this.pending.set(key,work);try{return await work;}finally{this.pending.delete(key);}
  }
- async load(url,signal){
+ async load(url,signal,cacheOnly=true){
+  signal?.throwIfAborted();
   if(this.memory.has(url)){this.stats.hits++;return this.memory.get(url);}
   if(this.cache){try{const response=await this.cache.match(url);if(response?.ok&&response.headers.get('Content-Type')?.startsWith('image/')){const blob=await response.blob();if(blob.size){this.stats.hits++;return blob;}}}catch(e){this.warn('cache-read',`画像キャッシュ読込失敗 (${e.name})。別の保存先を確認します。`);}}
-  if(this.db){try{const blob=await this.disk('get',url);if(blob?.size){this.stats.hits++;return blob;}}catch(e){this.warn('db-read',`画像のIndexedDB読込失敗 (${e.name})。必要な画像を取得します。`);}}
+  if(this.db){try{const blob=await this.disk('get',url);if(blob?.size){this.stats.hits++;return blob;}}catch(e){this.warn('db-read',`画像のIndexedDB読込失敗 (${e.name})。別の保存先を確認します。`);}}
+  if(cacheOnly)throw Error('画像キャッシュがありません。学習を再開すると事前取得をやり直します: '+url);
   let blob,lastError;
   for(let attempt=0;attempt<3;attempt++){
    try{const response=await fetch(url,{signal});if(!response.ok){const reason=(await response.text()).slice(0,400);throw Error(`画像取得 HTTP ${response.status}: ${reason}`);}blob=await response.blob();this.bytes+=blob.size;
@@ -39,7 +42,7 @@ export class Dataset{
   if(stored){this.saved.add(url);this.stats.stored=this.saved.size;}else this.memory.set(url,blob);
   return blob;
  }
- async download(list,signal){let next=0,done=0;const controller=new AbortController(),combined=AbortSignal.any([signal,controller.signal]);const jobs=await Promise.allSettled(Array.from({length:6},async()=>{try{while(next<list.length){const r=list[next++];await this.image(r,combined);this.onProgress(null,++done,list.length,this.bytes);}}catch(e){controller.abort();throw e;}}));const failure=jobs.find(j=>j.status==='rejected');if(failure)throw failure.reason;}
+  async download(list,signal,concurrency=16,onProgress){const unique=[...new Map(list.map(r=>[this.url(r),r])).values()];return prefetchAll(unique,(r,s)=>this.image(r,s,{cacheOnly:false}),{signal,concurrency,onProgress:(n,total)=>onProgress?onProgress(n,total):this.onProgress(null,n,total,this.bytes)});}
 }
 const FACE_FLIP=[16,15,14,13,12,11,10,9,8,7,6,5,4,3,2,1,26,25,24,23,22,21,20,19,18,17,27,28,29,30,35,34,33,32,31,45,44,43,42,47,46,39,38,37,36,41,40,54,53,52,51,50,49,48,59,58,57,56,55,64,63,62,61,60,67,66,65];
 const FLIP=Array.from({length:133},(_,i)=>i<17?[0,2,1,4,3,6,5,8,7,10,9,12,11,14,13,16,15][i]:i<23?i<20?i+3:i-3:i<91?23+FACE_FLIP[i-23]:i<112?i+21:i-21);
