@@ -1,0 +1,52 @@
+name: Verify inference export
+on:
+  push:
+    branches: [checkpoint-inference-vrm-20261103]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  onnx:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Check JavaScript syntax
+        run: |
+          for file in dist/*.mjs; do node --check "$file"; done
+      - name: Export both graph architectures without private data
+        run: |
+          node --input-type=module <<'JS'
+          import fs from 'node:fs';
+          import {WB73} from './dist/model.mjs?revision=7';
+          import {Video73} from './dist/video-model.mjs';
+          import {convertCheckpoint} from './dist/checkpoint.mjs';
+          const tf={randomNormal:shape=>({shape,dispose(){}}),fill:shape=>({shape,dispose(){}}),variable:t=>t};
+          for(const [name,Model] of [['image',WB73],['video',Video73]]){
+            const model=new Model(tf),weights=[...model.weights].map(([name,w])=>({name,shape:w.shape,data:Array(w.shape.reduce((a,b)=>a*b,1)).fill(name.endsWith('.g')?1:0)}));
+            const result=await convertCheckpoint(new Blob([JSON.stringify({format:'wholebody73-webgpu-training-v1',schema:'compact73-coco-h3wb-v2',weights})]));
+            fs.writeFileSync(name+'.onnx',result.bytes);
+          }
+          JS
+      - name: Validate ONNX and run real CPU inference
+        run: |
+          pip install --disable-pip-version-check onnx==1.18.0 onnxruntime==1.22.0
+          python - <<'PY'
+          import onnx, onnxruntime as ort, numpy as np
+          for name in ['image','video']:
+              model=onnx.load(name+'.onnx')
+              onnx.checker.check_model(model,full_check=True)
+              session=ort.InferenceSession(name+'.onnx',providers=['CPUExecutionProvider'])
+              feeds={x.name:np.zeros(x.shape,dtype=np.float32) for x in session.get_inputs()}
+              feeds['tracking_rotation']=np.eye(3,dtype=np.float32)
+              outputs=session.run(None,feeds)
+              expected=[(1,73,2),(1,73),(1,73,3),(1,73,3)]
+              assert [o.shape for o in outputs]==expected
+              assert all(np.isfinite(o).all() for o in outputs)
+              print(name,'ONNX checked; inference finite; output shapes', [o.shape for o in outputs])
+          PY

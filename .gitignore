@@ -1,0 +1,3 @@
+*.onnx
+*.json.gz
+node_modules/
