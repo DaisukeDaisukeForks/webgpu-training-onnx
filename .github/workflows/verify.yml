@@ -19,6 +19,8 @@ jobs:
       - name: Check JavaScript syntax
         run: |
           for file in dist/*.mjs; do node --check "$file"; done
+      - name: Verify frame presentation and brief detection gaps
+        run: node --test tests/tracking.test.mjs
       - name: Export both graph architectures without private data
         run: |
           node --input-type=module <<'JS'
