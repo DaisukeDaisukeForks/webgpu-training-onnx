@@ -18,4 +18,7 @@ for split,source in [('train','1thErEToRbmM9uLNi1JXXfOsaS5VK2FXf'),('val','1N6Vg
         subprocess.run(['node','tools/prepare-coco.mjs',split],stdin=stream,check=True)
 for script in ['prepare-3d.py','prepare-paired.py','prepare-aspset-3d.py']:
     subprocess.run([sys.executable,'tools/'+script],check=True)
+subprocess.run(['node','tools/fetch-source.mjs'],check=True)
+subprocess.run(['node','tools/prepare-foot.mjs'],check=True)
+subprocess.run([sys.executable,'tools/prepare-aist.py'],check=True)
 subprocess.run(['node','tools/verify-data.mjs'],check=True)

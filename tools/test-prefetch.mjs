@@ -81,8 +81,8 @@ await Promise.all(files.map(f=>cache.bytes(f,undefined,{cacheOnly:true})));asser
 const manifest=JSON.parse(await readFile(new URL('../public/paired.json',import.meta.url),'utf8'));
 assert.equal(videoFiles({manifest}).length,5009);
 const app=await readFile(new URL('../public/app.mjs',import.meta.url),'utf8');
-assert.match(app,/await ensureData\(\);if\(state.phase<=2\)await ensureImages\(\[\.\.\.trainRows,\.\.\.valRows\]\);\s*while\(state.phase<4\)/);
-assert.match(app,/await ensureImages\(valRows\);await evaluate2d\(\)/);
+assert.match(app,/await ensureData\(\);if\(state.phase<=2\)await ensureImages\(\[\.\.\.trainRows,\.\.\.valRows,\.\.\.footValRows\]\);\s*while\(state.phase<4\)/);
+assert.match(app,/await ensureImages\(\[\.\.\.valRows,\.\.\.footValRows\]\);await evaluate2d\(\)/);
 const video=await readFile(new URL('../public/video-workflow.mjs',import.meta.url),'utf8');
 const train=video.slice(video.indexOf('async function train('));
 assert(train.indexOf('await prefetchVideo(')<train.indexOf('await videoBatch('));

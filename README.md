@@ -1,4 +1,17 @@
 # WholeBody73 WebGPU Training
+## AIST++身体3D教師（revision 12）
+公式ZIPの全SHA-256と対応シーケンス・フレーム数・カメラ・SMPL尺度を検証しました。追加学習教師は1,592,051カメラ観測（252クリップ・176,914時刻）、検証は126,954観測（22クリップ・14,186時刻）です。既存302,262例と合わせて1,894,313学習例です。同じ時刻の多視点を別の動作として数えません。公式pose分割・ignore listを使用し、尺度ファイルがない学習590・検証48クリップは除外します。誤同期カメラも除外します。
+AIST++は再構成された身体12点の教師として使います。カメラ座標を同じシーケンスのsmpl_scalingでメートル化し、腰中心・Unity軸へ変換します。手指・足先・顔の教師や実写RGBを補ったとは扱いません。既存のASPset画像特徴→3D対応学習を維持します。AIST++の誤差はH3WB・ASPsetと別に表示します。
+取得はSitesの名前付きCloudflareキャッシュを通し、4MiB単位・4並列で学習前に完了します。ブラウザにも教師を保存します。画像キャッシュの既存名・URLキー・IndexedDBは維持し、取得済み画像を削除・一括無効化しません。コードZIPに教師本体は含めません。
+用途は非商用・研究用。GoogleのAIST++注釈はCC BY 4.0。出典: https://google.github.io/aistplusplus_dataset/ 、Ruilong Li et al., Learning to Generate Diverse Dance Motions with Transformer, ICCV 2021。AIST Dance DB映像は取得していません。追加後の精度改善・GPU速度は未実測です。
+## 遮蔽・動画の動きの学習（revision 11）
+用途は非商用・研究用です。商用向けにCOCO-WholeBodyを外すモードは追加しません。AIST++の組み込みは以下のrevision 12に含まれます。AIST Dance DBの実写動画は取得していません。
+画像学習では初期seedから不透明な色付きブロック、0.6〜1.4倍のクロップ範囲変更、既存の回転・反転・明るさ変更を生成します。人工的に遮蔽した関節も元の正解座標で教師として残し、欠損点を新規作成しません。画像取得の完了順に乱数が左右されないよう、各画像のseedを取得前に確定します。検証には拡張を適用しません。
+動画には同一窓内で一貫した拡大・移動を適用し、後半1〜2フレームを遮蔽します。過去フレームは同じ動画の実画像です。画像CNNの特徴を再利用して各時点の3Dを計算し、正解の移動量・骨長・左右足首の相対位置との誤差を加えます。停止を促す一律平滑化や、正解で交差している脚まで禁止する制約は使いません。直接の動画3D教師は身体12点で、手指40点の振動を解決した実測結果ではありません。現在の3フレームを超える長い遮蔽への保証もありません。
+## CMU Human Foot・取得キャッシュ（revision 10）
+CMU Human Footの有効な足ラベル14,614人（10,970画像）を2D学習へ追加し、別画像の563人（434画像）を専用評価に使います。足の6点は左右の親指・小指・踵です。足裏の面・接地・3D正解は含みません。公式サイトの注釈ダウンロードが503のため、categoriesを配列へ変更したことを明記している固定コミットのミラーを使い、元ファイルのSHA-256を固定しています。出典・ライセンス・ミラー・ハッシュは生成JSONにも保存します。
+配布データはSitesの許可リスト付き取得APIから、4MiB単位・最大4並列で取得します。Cloudflareの名前付きCache APIとブラウザキャッシュを使い、同時に同じチャンクを要求した場合は取得を共有します。配布URLを利用者が指定するプロキシではありません。全体SHA-256を照合してから学習へ渡します。3D検証は60エポックごとと各3D段階の最終エポックで実行し、検証しなかった回の履歴へ古い指標をコピーしません。
+CMU注釈: CC BY 4.0。公式: https://cmu-perceptual-computing-lab.github.io/foot_keypoint_dataset/ 。ミラー: https://github.com/Eva20150932/coco-foot-and-leg/tree/5d99ff365a82073704e6feda1a4412065a0b62b1 。画像はCOCOの元ライセンスに従います。
 ## 画像の事前取得（revision 8）
 画像の一括取得呼び出しが学習開始経路から抜けていたため、各バッチがキャッシュ未保存画像を通信で取得していました。学習・検証画像10,256枚と、動画学習前の対応フレーム5,009枚を、それぞれ独立した事前取得フェーズでブラウザキャッシュへ保存します。並列数は8・16・32から選択（初期値16）でき、取得数・キャッシュ再利用数・進捗を表示します。保存済み画像は再取得せず、中断後は残りから取得します。
 事前取得の全要求とキャッシュ保存が完了するまで学習へ進みません。画像CNN・校正・評価・動画バッチはキャッシュ専用の読込経路を使い、キャッシュが失われた場合はエラーで停止します。学習中に暗黙の画像取得は行いません。再開時に事前取得を行い、既存の重み・Adam・学習順序は維持します。学習速度の計測は事前取得の後に開始します。WebGPU実機での例/秒の改善率は未測定です。
@@ -29,7 +42,7 @@ ASPset-510はCC0-1.0。Aiden Nibali, Joshua Millward, Zhen He, Stuart Morgan / L
 3D準備学習、画像CNNの全層学習、学習画像での認識誤差校正、誤差を加えた3D仕上げを行います。教師がない点は損失から除外します。2Dは部位別Gaussianヒートマップ損失、3Dは身体・手・足・顔の部位別Huber損失です。画像には回転、拡縮、移動、左右反転、明るさ変化を適用します。左右反転ではラベルの左右を入れ替えます。2D認識誤差は学習用画像だけで校正します。
 ## データ
 2DはCOCO-WholeBody train2017の異なる10,000画像、検証はval2017の256画像です。画像はS3から個別取得し、SitesのR2キャッシュと端末のCache API/IndexedDBで再利用します。50GBの全画像アーカイブを取得する処理はありません。注釈の出典と画像のライセンス情報はCOCOメタデータに保存します。
-3DはH3WBの公式注釈NPZをSHA-256検証後に準備し、S1/S5/S6の全60,000例を学習、S7の全20,000例を検証に使います。間引き・複製による水増しはありません。同じ時刻の4カメラ観測を含み、独立した動作数と視点別ラベル数は異なります。Human3.6MのRGB画像は未取得であり、画像CNNはCOCO画像→2D、MLPはH3WBの同一フレームの正解2D→正解3Dを別々に学習します。H3WBにRGB画像を対応させた共同学習は含みません。ASPsetのRGB/3D対応学習は上記の動画経路で行います。73点選択、メートル化、腰中心化、Y軸反転によるUnity軸変換を行っています。H3WBの注釈には多視点再構成や補完が含まれ、すべての指・顔の点を個別の光学マーカーで測定した正解という意味ではありません。ASPsetは上記の身体3D準備学習・対応動画学習で使います。CMU FootとAIST++は使用していません。
+3DはH3WBの公式注釈NPZをSHA-256検証後に準備し、S1/S5/S6の全60,000例を学習、S7の全20,000例を検証に使います。間引き・複製による水増しはありません。同じ時刻の4カメラ観測を含み、独立した動作数と視点別ラベル数は異なります。Human3.6MのRGB画像は未取得であり、画像CNNはCOCO画像→2D、MLPはH3WBの同一フレームの正解2D→正解3Dを別々に学習します。H3WBにRGB画像を対応させた共同学習は含みません。ASPsetのRGB/3D対応学習は上記の動画経路で行います。73点選択、メートル化、腰中心化、Y軸反転によるUnity軸変換を行っています。H3WBの注釈には多視点再構成や補完が含まれ、すべての指・顔の点を個別の光学マーカーで測定した正解という意味ではありません。ASPsetは上記の身体3D準備学習・対応動画学習で使います。revision 7時点ではCMU FootとAIST++は未使用でした。CMU Footはrevision 10で2D学習へ追加しています。
 各3Dラベルの行に対応する公式sample ID・被験者・動作・カメラ・元フレーム番号・クロップ範囲を`h3wb-train-frames.json`と`h3wb-val-frames.json`に保存しています。対応表の保存ボタンはハッシュを検証しブラウザへキャッシュしてから取得します。RGB画像本体は含みません。COCO画像へ無関係なH3WBの3D正解を付与しません。
 ## 保存と再開
 教師データは、画像だけでなくCOCOの2Dアノテーション、H3WBの3Dラベル、データ構成情報もブラウザへ保存します。Cache APIを優先し、保存できない場合はIndexedDBを使います。サイズとSHA-256を確認し、ファイル内容のハッシュをキャッシュキーに含めます。再読込後・学習再開時は有効な保存データを優先し、従来の3Dキャッシュも検証して再利用します。保存件数・キャッシュ参照回数・新規取得量を画面に表示します。ブラウザが両保存先を拒否した場合はメモリへ退避し、セッション終了後に再取得が必要であることを表示します。
@@ -44,8 +57,12 @@ ASPset-510はCC0-1.0。Aiden Nibali, Joshua Millward, Zhen He, Stuart Morgan / L
 H3WB注釈はMITです。Copyright (c) 2022 H3WB 3D WholeBody Dataset Annotations。Yue Zhu, Nermin Samet and David Picard, H3WB: Human3.6M 3D WholeBody Dataset and Benchmark, ICCV 2023。配布元 https://github.com/wholebody3d/wholebody3d 、公式NPZ https://drive.google.com/file/d/1LZh4Jsg3_ZKBF0iEPiexzoGHE4srLgfC/view 。ライセンス全文を`public/H3WB-LICENSE.txt`へ同梱しています。モデルの利用条件はコードのUnlicenseと同一ではなく、実際に使用したデータの条件を受けます。
 
 ## ローカルのビルド
-コードZIPには教師データ、画像、学習済み重みを含めません。Node.js、Python 3.12、ffmpeg/ffprobe 6.1.1を用意し、`python -m pip install -r tools/data-requirements.txt`、`npm run data:prepare`、`npm run build`の順で実行します。教師は公式配布元から取得して再生成し、`config/data-lock.json`で照合します。R2の教師データや特定の公開サイトへのアクセスは不要です。GitHub Actionsワークフローは含みません。
-COCO-WholeBodyは公式Train/Validation注釈だけを取得し、画像本体はブラウザからS3へ個別取得します。H3WBは固定SHA-256の公式NPZを使います。ASPsetの注釈は固定MD5で検証し、動画は公式アーカイブの先頭900MiB以内にある`config/data-recipe.json`の指定クリップだけを使用します。23.7GBの全動画や50GBの画像アーカイブは取得しません。H3WB/ASPsetのキャッシュは`H3WB_CACHE`/`ASPSET_CACHE`、既存COCO注釈は`COCO_TRAIN_ANNOTATIONS`/`COCO_VAL_ANNOTATIONS`で指定できます。
+コードZIPには教師データ、画像、学習済み重みを含めません。Node.js、Python 3.12、ffmpeg/ffprobe 6.1.1を用意し、`python -m pip install -r tools/data-requirements.txt`、`npm run data:prepare`、`npm run build`の順で実行します。教師は公式配布元から取得して再生成し、`config/data-lock.json`で照合します。R2に置いた教師データへの依存はありません。追加注釈の取得には、自分で公開したSitesのキャッシュAPIを使います。GitHub Actionsワークフローは含みません。
+COCO-WholeBodyは公式Train/Validation注釈だけを取得し、画像本体はSitesの画像API・Cloudflare R2キャッシュ経由でS3から個別取得します。H3WBは固定SHA-256の公式NPZを使います。ASPsetの注釈は固定MD5で検証し、動画は公式アーカイブの先頭900MiB以内にある`config/data-recipe.json`の指定クリップだけを使用します。23.7GBの全動画や50GBの画像アーカイブは取得しません。H3WB/ASPsetのキャッシュは`H3WB_CACHE`/`ASPSET_CACHE`、既存COCO注釈は`COCO_TRAIN_ANNOTATIONS`/`COCO_VAL_ANNOTATIONS`で指定できます。
 再生成後は3Dバイナリと動画クロップのSHA-256、選択画像IDと教師座標、動画フレームと3Dの対応、学習・検証件数を照合し、不一致ならビルドを止めます。JPEGのバイト列も照合するため、ffmpegとPillowの指定版を使ってください。公式配布元の公開停止や認証変更に対して永続的な取得を保証するものではありません。
 
 再生成した教師のラベル・JSONはSitesの配信ビルド時にgzip圧縮し、ブラウザで展開後に元のSHA-256を検証してキャッシュします。教師数やフレーム数は減らしません。提出するコードZIPと、Sitesへ送る生成済み配信アーカイブは別です。
+
+## CMU/AIST++の再取得
+`tools/build-source-proxy.mjs` は教師ファイルを持たない小さな配信ビルドを作成します。新規複製では自分のSitesプロジェクトを登録してhosting.jsonへ設定し、この取得APIを先に公開します。`TEACHER_SITE=https://自分のSites` を設定して `node tools/fetch-source.mjs` を実行すると、CMU注釈とAIST++の小さなカメラ・分割情報をCloudflareキャッシュ経由で取得し、固定SHA-256を検証します。非公開Siteの認証が必要な場合は `SITES_BYPASS_TOKEN` を環境変数で渡し、URL・コード・ZIPへ書かないでください。
+CMUの保存先は `CMU_FOOT_CACHE`、AIST++は `AIST_CACHE` で変更できます。`node tools/prepare-foot.mjs` と `python tools/prepare-aist.py` がブラウザ用の教師・メタデータを再生成します。大きなAIST++注釈ZIPはコードZIPにもSites配信ファイルにも同梱せず、学習開始前に同じ取得API経由でブラウザへ保存します。`config/source-assets.json` が公式URL・サイズ・SHA-256を固定しています。現在の公開Siteや個人のR2バケットがなくなっても、自分のSiteを立てて取得経路を再現できます。

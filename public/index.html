@@ -2,7 +2,7 @@
 <html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>WholeBody73 · 学習</title><link rel="stylesheet" href="style.css"></head>
 <body><main>
 <header><div class="brand">WHOLEBODY<span>73</span><small>TRAIN → VRCHAT</small></div><span class="badge" id="gpu">WebGPU未初期化</span></header>
-<section class="intro"><p class="eyebrow">ブラウザでモデル学習</p><h1>学習して、<br><span>ONNXを保存。</span></h1><p>73点の画像認識と、VRC用の3D推定をゼロから学習します。</p><div class="stats"><div><b>10,000</b><span>学習画像</span></div><div><b>302,262</b><span>3D教師データ</span></div><div><b>73</b><span>身体・指・足・顔</span></div></div></section>
+<section class="intro"><p class="eyebrow">ブラウザでモデル学習</p><h1>学習して、<br><span>ONNXを保存。</span></h1><p>73点の画像認識と、VRC用の3D推定をゼロから学習します。</p><div class="stats"><div><b id="image-count">読込後に表示</b><span>学習画像</span></div><div><b id="teacher3d-count">302,262</b><span>3D教師データ</span></div><div><b>73</b><span>身体・指・足・顔</span></div></div></section>
 <section class="panel">
 <div class="section-title"><h2>学習</h2><span>WebGPU</span></div>
 <div class="settings"><label>2Dエポック<input id="ep2" type="number" value="20" min="1"></label><label>3D準備エポック<input id="warm" type="number" value="30" min="1"></label><label>3D仕上げエポック<input id="ep3" type="number" value="30" min="1"></label><label>画像バッチ<input id="bs2" type="number" value="8" min="1"></label><label>3Dバッチ<input id="bs3" type="number" value="128" min="1"></label><label>2D学習率<input id="lr2" type="number" value="0.001" min="0.0000001" step="0.0001"></label><label>3D学習率<input id="lr3" type="number" value="0.001" min="0.0000001" step="0.0001"></label><label>事前取得の並列数<select id="prefetch-concurrency"><option value="8">8</option><option value="16" selected>16</option><option value="32">32</option></select></label><label>乱数Seed<input id="seed" type="number" value="20261103" min="1"></label></div>
@@ -15,7 +15,7 @@
 <section class="panel">
 <div class="section-title"><h2>精度・ONNX保存</h2><button id="eval" class="secondary" disabled>精度を評価</button></div>
 <div class="table-wrap"><table><thead><tr><th>部位</th><th>2D PCK@0.05</th><th>3D誤差 / mm</th><th>3D評価点数</th></tr></thead><tbody id="quality"><tr><td colspan="4">未評価</td></tr></tbody></table></div>
-<p class="subtle">検証画像256枚、H3WB 20,000件、ASPset 46,317件で評価。3Dの値は、正解2D座標を入力した場合の誤差です。</p><p id="gate">未評価</p>
+<p class="subtle">COCO検証256例、CMU Foot検証563例。H3WB・ASPsetの3D値は正解2Dを入力した誤差です。自動3D検証は60エポックごとと各フェーズの最終回です。</p><p id="foot-quality" class="subtle">CMU Footの2D精度: 未評価</p><p id="gate">未評価</p>
 <div class="actions"><button id="export" disabled>ONNXを保存</button><button id="manifest" class="secondary" disabled>学習結果を保存</button></div>
 </section>
 <section class="panel">
@@ -36,5 +36,6 @@
 <p class="subtle">指定先へ学習済みモデルを公開します。同名ファイルは更新されます。トークンは保存しません。</p><button id="publish" disabled>公開する</button><p id="published"></p>
 </section>
 <details class="panel"><summary>ログ・出典・ライセンス</summary><pre id="log"></pre><button id="frame-map" class="secondary" disabled>教師データの対応表を保存</button><p>ASPset-510: CC0-1.0。Aiden Nibali, Joshua Millward, Zhen He, Stuart Morgan / La Trobe University・Australian Institute of Sport。<a href="https://archive.org/details/aspset510">配布元</a>・<a href="https://github.com/anibali/aspset-510">出典・ライセンス</a></p><p>COCO-WholeBody: 研究・非商用条件、各画像の原ライセンス。Jin et al., ECCV 2020 / SenseTime Research。<a href="https://github.com/jin-s13/COCO-WholeBody">配布・利用条件</a></p><p>H3WB注釈: MIT。Copyright © 2022 H3WB 3D WholeBody Dataset Annotations。Zhu, Samet, Picard, ICCV 2023。<a href="https://github.com/wholebody3d/wholebody3d">配布・ライセンス</a></p><p>座標系: <a href="https://docs.vrchat.com/docs/osc-trackers">VRChat OSC Trackers</a></p></details>
+<p class="subtle">非商用・研究用の学習です。CMU Human Foot注釈はCC BY 4.0、画像は各COCO画像の条件に従います。<a href="https://cmu-perceptual-computing-lab.github.io/foot_keypoint_dataset/">CMU Human Foot</a></p>
 <footer>WHOLEBODY73</footer>
-</main><script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js"></script><script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-webgpu@4.22.0/dist/tf-backend-webgpu.min.js"></script><script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.22.0/dist/ort.webgpu.min.js"></script><script type="module" src="app.mjs?revision=8"></script></body></html>
+</main><script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js"></script><script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-webgpu@4.22.0/dist/tf-backend-webgpu.min.js"></script><script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.22.0/dist/ort.webgpu.min.js"></script><script type="module" src="app.mjs?revision=12"></script></body></html>

@@ -1,0 +1,44 @@
+{
+  "aist-cameras": {
+    "url": "https://github.com/google/aistplusplus_dataset/releases/download/v1.0/cameras.zip",
+    "bytes": 27294,
+    "sha256": "134050b967fe92364450fd341bf02c36e23873b7677c42288dfc428db4547637",
+    "chunkBytes": 4194304
+  },
+  "aist-ignore-list": {
+    "url": "https://github.com/google/aistplusplus_dataset/releases/download/v1.0/ignore_list.txt",
+    "bytes": 1217,
+    "sha256": "be44c54baa91a1aff18306da2f3fc44abd1adfbb32317ac9f9b1362685415339",
+    "chunkBytes": 4194304
+  },
+  "aist-keypoints3d": {
+    "url": "https://github.com/google/aistplusplus_dataset/releases/download/v1.0/keypoints3d.zip",
+    "bytes": 876142511,
+    "sha256": "8b2a3bfcea233b8d1859a0dc93c7800a8f9e832136ef6828d0b3ddff640ddcfd",
+    "chunkBytes": 4194304
+  },
+  "aist-motions": {
+    "url": "https://github.com/google/aistplusplus_dataset/releases/download/v1.0/motions.zip",
+    "bytes": 78684689,
+    "sha256": "ceff08766802705888701ae27771ddf28d9c0141043b8a12fc342a0cddd2ed1e",
+    "chunkBytes": 4194304
+  },
+  "aist-splits": {
+    "url": "https://github.com/google/aistplusplus_dataset/releases/download/v1.0/splits.zip",
+    "bytes": 16454,
+    "sha256": "38e2d47c81d245fdc0d65b3897b83db1693eea377edc13b30270e4928f4073ad",
+    "chunkBytes": 4194304
+  },
+  "cmu-train": {
+    "url": "https://raw.githubusercontent.com/Eva20150932/coco-foot-and-leg/5d99ff365a82073704e6feda1a4412065a0b62b1/person_keypoints_train2017_foot_v1.json",
+    "bytes": 48142095,
+    "sha256": "2b6bf91cd06a182b85883e41678eb7a5b26be1dad938913bf3d085652450c4d9",
+    "chunkBytes": 4194304
+  },
+  "cmu-val": {
+    "url": "https://raw.githubusercontent.com/Eva20150932/coco-foot-and-leg/5d99ff365a82073704e6feda1a4412065a0b62b1/person_keypoints_val2017_foot_v1.json",
+    "bytes": 1884092,
+    "sha256": "5c9a13a6ae266a6b13d823d3abc1327ecb9c0deecea8c2aa91f48503bbafd6db",
+    "chunkBytes": 4194304
+  }
+}
