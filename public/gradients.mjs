@@ -8,7 +8,9 @@ export async function stableStep(tf,fn,vars,optimizer,apply=true){
   ({summary,validity,factor}=tf.tidy(()=>{
    const peak=tf.stack(entries.map(([,v])=>v.abs().max())).max();
    const divisor=tf.where(peak.greater(0),peak,tf.scalar(1));
-   const squared=tf.addN(entries.map(([,v])=>v.div(divisor).square().sum()));
+   // WebGPU AddN binds every input at once (100 grads + output > limit 8).
+   // Stack/Concat splits inputs by the device binding limit; Sum reads one buffer.
+   const squared=tf.stack(entries.map(([,v])=>v.div(divisor).square().sum())).sum();
    // For a nonzero gradient, the scaled squared norm is at least one.
    // Divide in two stages: peak * sqrt(squared) can overflow for finite grads.
    const factor=tf.scalar(1).div(divisor).div(squared.maximum(1).sqrt()).minimum(1);
