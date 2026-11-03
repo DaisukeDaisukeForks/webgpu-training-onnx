@@ -1,33 +1,35 @@
 import {WB73} from './model.mjs?revision=7';import {Dataset,Data3D,crop,batch2d,rng,shuffle} from './data.mjs?revision=17';import {SPEC,GROUPS,NAMES} from './schema.mjs';
-import {mountVideo} from './video-workflow.mjs?revision=17';
-import {rememberPosition,setEpochTargets,selectNextPhase} from './training-progress.mjs?revision=17';
+import {mountVideo} from './video-workflow.mjs?revision=18';
+import {CONFIG_KEYS,applyTrainingSettings,selectNextPhase} from './training-progress.mjs?revision=18';
 import {readWeights,assignWeights,readAdam,restoreAdam} from './snapshot.mjs?revision=17';
 import {stableStep} from './gradients.mjs?revision=15';
 import {recoverCheckpoint,readCheckpoint} from './recovery.mjs?revision=17';
 import {publishModel} from './publish.mjs?revision=12';
 import {teachers,TEACHERS} from './teacher-cache.mjs?revision=17';
 const tf=window.tf,$=id=>document.getElementById(id),dispose=o=>Object.values(o).forEach(t=>t?.dispose?.());let model,ds,d3,trainRows,valRows,footValRows=[],footSource,opt2,opt3,busy=false,abort,state,residuals=[],metrics={},lastSave=0,lastPrediction,loadedImage;
-const epochKeys=['ep2','ep3','warm'],epochOverrides={};let restored=false,trainingStartedAt=null,baseRunActive=false,videoWorkflow,fileBackupPending=false,lastFileTrainingMs=null;
+const settingOverrides={},shownSettings={};let restored=false,trainingStartedAt=null,baseRunActive=false,videoWorkflow,fileBackupPending=false,lastFileTrainingMs=null;
 const imageDatasetRevision='coco40k-hand-cmu-foot-v1',snapshotFiles=['coco-train.json','cmu-foot-train.json','coco-extra-train-0.json','coco-extra-train-1.json','coco-val.json','cmu-foot-val.json','h3wb.json','aist.json','paired.json'];
 const snapshotUI=['prefetch-concurrency','video-epochs','video-batch','yaw','ox','oy','oz'];
-const initial=()=>({version:1,phase:0,epoch:0,cursor:0,order:[],rng:Number($('seed').value),updates2:0,updates3:0,calibrationIndex:0,history:[],trainingMilliseconds:0,trainingTimeComplete:true,config:Object.fromEntries(['ep2','ep3','warm','bs2','bs3','lr2','lr3','seed'].map(k=>[k,Number($(k).value)]))});
-for(const key of epochKeys)$(key).addEventListener('input',()=>{epochOverrides[key]=Number($(key).value);});
+const initial=()=>({version:1,phase:0,epoch:0,cursor:0,order:[],rng:Number($('seed').value),updates2:0,updates3:0,calibrationIndex:0,history:[],trainingMilliseconds:0,trainingTimeComplete:true,config:Object.fromEntries(CONFIG_KEYS.map(k=>[k,Number($(k).value)]))});
+for(const key of [...CONFIG_KEYS,...snapshotUI]){const field=$(key);shownSettings[key]=field.defaultValue??field.value;for(const event of ['input','change'])field.addEventListener(event,()=>{settingOverrides[key]=field.value;});}
+function manualValue(key,saved){if($(key).value!==shownSettings[key])settingOverrides[key]=$(key).value;return settingOverrides[key]??saved;}
+function showSetting(key,value){$(key).value=value;shownSettings[key]=$(key).value;}
 function recordTrainingTime(){if(!state)return;if(!Number.isFinite(state.trainingMilliseconds)){state.trainingMilliseconds=0;state.trainingTimeComplete=!state.updates2&&!state.updates3;}if(trainingStartedAt!==null){const now=performance.now();state.trainingMilliseconds+=now-trainingStartedAt;trainingStartedAt=now;}$('training-hours').textContent=`${(state.trainingMilliseconds/3600000).toFixed(1)} 時間${state.trainingTimeComplete?'':'（以前の未計測分を除く）'}`;}
 function startTrainingTime(){recordTrainingTime();if(lastFileTrainingMs===null)lastFileTrainingMs=state.trainingMilliseconds;if(trainingStartedAt===null)trainingStartedAt=performance.now();}
 function stopTrainingTime(){recordTrainingTime();trainingStartedAt=null;}
 function trainingTime(){recordTrainingTime();return{training_hours:Number(((state?.trainingMilliseconds||0)/3600000).toFixed(1)),training_time_complete:state?.trainingTimeComplete??true};}
 function trainingTimeState(){recordTrainingTime();return{trainingMilliseconds:state.trainingMilliseconds,trainingTimeComplete:state.trainingTimeComplete};}
 function restoreTrainingTime(value){if(value&&Number.isFinite(value.trainingMilliseconds)){state.trainingMilliseconds=value.trainingMilliseconds;state.trainingTimeComplete=value.trainingTimeComplete===true;}else state.trainingTimeComplete=false;recordTrainingTime();}
-function applyEpochTargets(){setEpochTargets(state,Object.fromEntries(epochKeys.map(k=>[k,Number($(k).value)])));for(const k of epochKeys)$(k).value=state.config[k];}
+function applySettings(){const before={...state.config};applyTrainingSettings(state,Object.fromEntries(CONFIG_KEYS.map(k=>[k,Number($(k).value)])));if(before.lr2!==state.config.lr2)opt2.learningRate=state.config.lr2;if(before.lr3!==state.config.lr3)opt3.learningRate=state.config.lr3;for(const k of CONFIG_KEYS)showSetting(k,state.config[k]);}
 function advancePhase(){if(selectNextPhase(state))residuals=[];}
 function autoFileDue(){recordTrainingTime();return lastFileTrainingMs!==null&&state.trainingMilliseconds-lastFileTrainingMs>=30*60*1000;}
 function downloadCheckpoint(p,automatic=false){const stamp=new Date().toISOString().replace(/[:.]/g,'-');download(`wholebody73-training-${stamp}.json`,JSON.stringify(p),'application/json');lastFileTrainingMs=state.trainingMilliseconds;fileBackupPending=false;$('file-backup-status').textContent=`${new Date().toLocaleTimeString()} JSONのダウンロードを要求しました。`;log(`${automatic?'30分ごとの自動':'手動'}バックアップJSONを出力。重み・Adam・乱数・途中順序・校正・動画学習を含みます。`);}
 async function checkpointBoundary(force=false){if(!force&&!fileBackupPending&&!autoFileDue()&&performance.now()-lastSave<60000)return;try{await save();}catch(e){lastSave=performance.now();log(`チェックポイント保存失敗: ${e.message}`);}}
-async function requestBackup(){if(!model)return;if(baseRunActive||videoWorkflow?.isTraining()){fileBackupPending=true;$('file-backup-status').textContent='現在のバッチ完了後にJSONを出力します。';return;}if(busy)return;busy=true;controls();try{applyEpochTargets();downloadCheckpoint(await pack());}catch(e){problem(e);}finally{busy=false;controls();}}
+async function requestBackup(){if(!model)return;if(baseRunActive||videoWorkflow?.isTraining()){fileBackupPending=true;$('file-backup-status').textContent='現在のバッチ完了後にJSONを出力します。';return;}if(busy)return;busy=true;controls();try{applySettings();downloadCheckpoint(await pack());}catch(e){problem(e);}finally{busy=false;controls();}}
 const random=()=>{state.rng=(Math.imul(1664525,state.rng)+1013904223)>>>0;return state.rng/4294967296;};
 function log(s){$('log').textContent+=`${new Date().toLocaleTimeString()} ${s}\n`;console.log(s);}function status(s){$('status').textContent=s;log(s);}function progress(title,n,total,detail='',eta='—'){recordTrainingTime();$('phase').textContent=title;$('progress').value=total?n/total:0;$('percent').textContent=total?`${(100*n/total).toFixed(1)}%`:'…';$('detail').textContent=detail;$('eta').textContent=eta;$('updates').textContent=`${state?.updates2||0} / ${state?.updates3||0}`;$('cached').textContent=ds?.stats.stored||0;}
 function prefetchConcurrency(){const n=Number($('prefetch-concurrency').value);if(![8,16,32].includes(n))throw Error('取得並列数を確認してください');return n;}
-function controls(){$('prefetch-concurrency').disabled=busy;for(const k of ['start','save','eval','manifest','frame-map'])$(k).disabled=busy||!model;$('backup').disabled=!model||(busy&&!baseRunActive&&!videoWorkflow?.isTraining());$('backup-video').disabled=$('backup').disabled;$('resume').disabled=busy;$('init').disabled=busy||!!model;$('stop').disabled=!busy||!abort;$('export').disabled=busy||!state?.updates2||!state?.updates3;$('publish').disabled=$('export').disabled;$('infer').disabled=busy||!model||!loadedImage;$('positions').disabled=busy||!lastPrediction;$('checkpoint-file').disabled=busy;for(const k of epochKeys)$(k).disabled=busy;for(const k of ['bs2','bs3','lr2','lr3','seed'])$(k).disabled=busy||restored||!!state?.updates2||!!state?.updates3;for(const k of ['train-video','resume-video','infer-video','video-epochs','video-batch'])$(k).disabled=busy;}
+function controls(){$('prefetch-concurrency').disabled=busy;for(const k of ['start','save','eval','manifest','frame-map'])$(k).disabled=busy||!model;$('backup').disabled=!model||(busy&&!baseRunActive&&!videoWorkflow?.isTraining());$('backup-video').disabled=$('backup').disabled;$('resume').disabled=busy;$('init').disabled=busy||!!model;$('stop').disabled=!busy||!abort;$('export').disabled=busy||!state?.updates2||!state?.updates3;$('publish').disabled=$('export').disabled;$('infer').disabled=busy||!model||!loadedImage;$('positions').disabled=busy||!lastPrediction;$('checkpoint-file').disabled=busy;for(const k of CONFIG_KEYS)$(k).disabled=busy;for(const k of ['train-video','resume-video','infer-video','video-epochs','video-batch'])$(k).disabled=busy;}
 function download(name,data,type='application/octet-stream'){const u=URL.createObjectURL(new Blob([data],{type})),a=document.createElement('a');a.href=u;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(u),30000);}
 function problem(e){status(e.name==='AbortError'?'停止しました。保存された途中位置から継続できます。':`処理失敗: ${e.message}`);log(e.stack||String(e));}
 async function gradients(fn,vars,optimizer,apply=true){return stableStep(tf,fn,vars,optimizer,apply);}
@@ -55,7 +57,7 @@ async function prepareModel(check=true){
 async function init(){if(busy)return;busy=true;controls();try{await prepareModel();}catch(e){problem(e);}finally{busy=false;controls();}}
 function db(mode,value){return new Promise((resolve,reject)=>{const q=indexedDB.open('wholebody73-training',1);q.onupgradeneeded=()=>q.result.createObjectStore('runs');q.onerror=()=>reject(q.error);q.onsuccess=()=>{const d=q.result,tx=d.transaction('runs',mode==='get'?'readonly':'readwrite'),s=tx.objectStore('runs'),r=mode==='get'?s.get('latest'):s.put(value,'latest');let result;r.onsuccess=()=>result=r.result;tx.oncomplete=()=>{d.close();resolve(result);};tx.onerror=()=>{d.close();reject(tx.error);};};});}
 async function pack(){
- rememberPosition(state);
+ applySettings();
  const weights=await readWeights(model),adam2=await readAdam(opt2),adam3=await readAdam(opt3),video=await videoWorkflow.pack();
  recordTrainingTime();
  return{format:'wholebody73-webgpu-training-v1',checkpoint_revision:2,schema:SPEC.schema,state:structuredClone(state),weights,opt2:adam2.weights,opt3:adam3.weights,optimizer2:adam2.metadata,optimizer3:adam3.metadata,residuals:structuredClone(residuals),metrics:structuredClone(metrics),video,ui:Object.fromEntries(snapshotUI.map(k=>[k,$(k).value])),display:{loss:$('loss').textContent},teacher_hashes:Object.fromEntries(snapshotFiles.map(k=>[k,TEACHERS[k].sha256])),source_sha256:d3.manifest.sha256,saved_at:new Date().toISOString()};
@@ -74,14 +76,15 @@ async function restore(p){
  const options=p.state?.config;
  if(!options||!['ep2','ep3','warm','bs2','bs3','seed'].every(k=>Number.isInteger(options[k])&&options[k]>0)||!['lr2','lr3'].every(k=>Number.isFinite(options[k])&&options[k]>0))throw Error('不正な学習設定');
  if(!Number.isInteger(p.state.phase)||p.state.phase<0||p.state.phase>4||!Number.isInteger(p.state.rng)||!Array.isArray(p.state.order))throw Error('不正な学習位置');
+ const requested=Object.fromEntries(CONFIG_KEYS.map(k=>[k,Number(manualValue(k,k==='ep2'&&!p.checkpoint_revision?Math.max(options[k],100):options[k]))])),nextState=structuredClone(p.state);
+ applyTrainingSettings(nextState,requested);
  const next=new WB73(tf,options.seed);let next2,next3;
- try{assignWeights(tf,next,p.weights);next2=await restoreAdam(tf,p.opt2,p.optimizer2,next.poseVars,options.lr2);next3=await restoreAdam(tf,p.opt3,p.optimizer3,next.liftVars,options.lr3);}
+ try{assignWeights(tf,next,p.weights);next2=await restoreAdam(tf,p.opt2,p.optimizer2,next.poseVars,options.lr2);next3=await restoreAdam(tf,p.opt3,p.optimizer3,next.liftVars,options.lr3);if(requested.lr2!==options.lr2)next2.learningRate=requested.lr2;if(requested.lr3!==options.lr3)next3.learningRate=requested.lr3;}
  catch(e){next.dispose();next2?.dispose();next3?.dispose();throw e;}
  model.dispose();opt2.dispose();opt3.dispose();model=next;opt2=next2;opt3=next3;
- state=structuredClone(p.state);restored=true;trainingStartedAt=null;lastFileTrainingMs=null;fileBackupPending=false;rememberPosition(state);residuals=p.residuals||[];metrics=p.metrics||{};
- for(const[k,v]of Object.entries(options))if($(k))$(k).value=epochKeys.includes(k)?Math.max(v,epochOverrides[k]??(k==='ep2'&&!p.checkpoint_revision?100:v)):v;
- for(const key of snapshotUI)if(p.ui?.[key]!=null)$(key).value=p.ui[key];
- applyEpochTargets();for(const k of epochKeys)delete epochOverrides[k];
+ state=nextState;restored=true;trainingStartedAt=null;lastFileTrainingMs=null;fileBackupPending=false;residuals=p.residuals||[];metrics=p.metrics||{};
+ for(const key of CONFIG_KEYS)showSetting(key,state.config[key]);
+ for(const key of snapshotUI)if(p.ui?.[key]!=null)showSetting(key,manualValue(key,p.ui[key]));
  if(p.display?.loss)$('loss').textContent=p.display.loss;
  recordTrainingTime();showMetrics();log(`チェックポイントを復元。phase=${state.phase}, epoch=${state.epoch}, cursor=${state.cursor}, updates=${state.updates2}/${state.updates3}`);
 }
@@ -118,7 +121,7 @@ async function run(){
  baseRunActive=true;busy=true;abort=new AbortController();controls();let lock;
  try{
   if(!restored&&!state.updates2&&!state.updates3){const requested=initial();if(requested.config.seed!==state.config.seed){model.dispose();model=new WB73(tf,requested.config.seed);}state=requested;opt2.learningRate=state.config.lr2;opt3.learningRate=state.config.lr3;}
-  applyEpochTargets();advancePhase();const cfg=state.config;
+  applySettings();advancePhase();const cfg=state.config;
   if(!['ep2','ep3','warm','bs2','bs3'].every(k=>Number.isInteger(cfg[k])&&cfg[k]>0)||!(cfg.lr2>0&&cfg.lr3>0))throw Error('学習設定を確認してください');
   try{lock=await navigator.wakeLock?.request('screen');}catch{}
   await ensureData();if(state.phase<=2||state.pendingEvaluation?.phase===1)await ensureImages([...trainRows,...valRows,...footValRows]);startTrainingTime();await finishEpochEvaluation();
@@ -150,7 +153,7 @@ async function run(){
  }catch(e){problem(e);}finally{stopTrainingTime();if(model)await checkpointBoundary(true);try{await lock?.release();}finally{abort=null;baseRunActive=false;busy=false;controls();}}
 }
 $('init').onclick=init;$('start').onclick=()=>run();$('stop').onclick=()=>abort?.abort();
-$('save').onclick=async()=>{if(busy)return;busy=true;controls();try{applyEpochTargets();await save();status('チェックポイントを保存しました。');}catch(e){problem(e);}finally{busy=false;controls();}};
+$('save').onclick=async()=>{if(busy)return;busy=true;controls();try{applySettings();await save();status('チェックポイントを保存しました。');}catch(e){problem(e);}finally{busy=false;controls();}};
 $('backup').onclick=requestBackup;
 async function restoreAndRun(read){
  if(busy)return;busy=true;abort=null;controls();
@@ -176,6 +179,6 @@ function calibration(){const angle=Number($('yaw').value)*Math.PI/180,c=Math.cos
 $('infer').onclick=async()=>{busy=true;controls();let image,rotation,origin,pred;try{const canvas=new OffscreenCanvas(192,256),c=canvas.getContext('2d');c.drawImage(loadedImage,0,0,192,256);image=tf.tidy(()=>tf.browser.fromPixels(canvas).toFloat().div(255).expandDims());const cal=calibration();rotation=tf.tensor(cal.rotation,[3,3]);origin=tf.tensor(cal.origin,[1,1,3]);pred=model.predict(image,rotation,origin);const[p,confidence]=await Promise.all([pred.positions.data(),pred.confidence.data()]);lastPrediction={coordinate_system:'Unity left-handed +X right +Y up +Z forward',unit:'meter',space:'calibrated tracking space',calibration:cal,trained:{updates2:state.updates2,updates3:state.updates3},positions:NAMES.map((name,j)=>({name,x:p[j*3],y:p[j*3+1],z:p[j*3+2],confidence2d:confidence[j]}))};$('coords').textContent=JSON.stringify(lastPrediction,null,2);draw(lastPrediction.positions);status('学習中の重みでVRC座標を推定しました。未学習・低精度の状態では、この座標も正しいとは限りません。');}catch(e){problem(e);}finally{image?.dispose();rotation?.dispose();origin?.dispose();if(pred)dispose(pred);busy=false;controls();}};
 function draw(points){const c=$('view'),g=c.getContext('2d');g.fillStyle='#10191e';g.fillRect(0,0,960,400);g.fillStyle='#a1b3bc';g.font='14px system-ui';g.fillText('FRONT · X / Y',30,25);g.fillText('SIDE · Z / Y',510,25);for(const p of points){g.fillStyle=p.confidence2d>.1?'#a9ef86':'#60706a';for(const x of [240+p.x*160,720+p.z*160]){g.beginPath();g.arc(x,360-p.y*160,3,0,Math.PI*2);g.fill();}}}
 $('positions').onclick=()=>download('wholebody73-vrc-positions.json',JSON.stringify(lastPrediction,null,2),'application/json');window.addEventListener('beforeunload',e=>{if(busy){e.preventDefault();e.returnValue='';}});controls();
-videoWorkflow=mountVideo({tf,prefetchConcurrency,getBase:()=>model,getState:()=>state,getDataReport:()=>({coco_train:40000,coco_with_hand_labels:32558,cmu_foot:footSource,h3wb:d3?.manifest,aist:d3?.manifest.aist}),gradients,progress,status,log,draw,download,startTrainingTime,stopTrainingTime,trainingTime,trainingTimeState,restoreTrainingTime,checkpointBoundary,requestBackup,setBusy:value=>{busy=value||baseRunActive;controls();},getSignal:()=>abort?.signal,setAbort:value=>abort=value});
+videoWorkflow=mountVideo({tf,prefetchConcurrency,manualValue,showSetting,applySettings,getBase:()=>model,getState:()=>state,getDataReport:()=>({coco_train:40000,coco_with_hand_labels:32558,cmu_foot:footSource,h3wb:d3?.manifest,aist:d3?.manifest.aist}),gradients,progress,status,log,draw,download,startTrainingTime,stopTrainingTime,trainingTime,trainingTimeState,restoreTrainingTime,checkpointBoundary,requestBackup,setBusy:value=>{busy=value||baseRunActive;controls();},getSignal:()=>abort?.signal,setAbort:value=>abort=value});
 queueMicrotask(()=>videoWorkflow.activate());
 $('publish').onclick=async()=>{busy=true;controls();try{const token=$('hf-token').value.trim(),repo=$('hf-repo').value.trim();if(!token)throw Error('Hugging Faceの書込トークンを入力してください');if(!state.updates2||!state.updates3)throw Error('2Dと3Dの実学習が必要です');const url=await publishModel({repo,token,bytes:await model.export(),spec:report(),progress});const a=document.createElement('a');a.href=url;a.textContent=url;a.target='_blank';a.rel='noopener';$('published').replaceChildren(a);progress('Hugging Face公開・取得確認完了',1,1,'ONNXを再取得し、サイズとSHA-256を確認');status('学習済みONNXと出典・ライセンスを公開しました。');}catch(e){problem(e);}finally{$('hf-token').value='';busy=false;controls();}};

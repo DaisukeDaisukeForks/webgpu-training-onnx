@@ -5,8 +5,8 @@ import {readWeights,assignWeights,readAdam,restoreAdam} from './snapshot.mjs?rev
 import {NAMES} from './schema.mjs';
 import {publishModel} from './publish.mjs?revision=12';
 export function mountVideo(ctx){
- const {tf,progress,status,log,draw,download}=ctx,$=id=>document.getElementById(id),dispose=o=>Object.values(o).forEach(t=>t?.dispose?.());let model,opt,data,verified=false,position={epoch:0,cursor:0,order:[],updates:0},evaluation=null,epochOverride,training=false,baseUpdates=null;
- $('video-epochs').addEventListener('input',()=>{epochOverride=Number($('video-epochs').value);});
+ const {tf,progress,status,log,draw,download}=ctx,$=id=>document.getElementById(id),dispose=o=>Object.values(o).forEach(t=>t?.dispose?.());let model,opt,data,verified=false,position={epoch:0,cursor:0,order:[],updates:0},evaluation=null,training=false,baseUpdates=null;
+ // Manual settings are tracked by the same form controller as base training.
  function disk(value){return new Promise((resolve,reject)=>{const q=indexedDB.open('wholebody73-video',1);q.onupgradeneeded=()=>q.result.createObjectStore('runs');q.onerror=()=>reject(q.error);q.onsuccess=()=>{const db=q.result,t=db.transaction('runs',value?'readwrite':'readonly'),s=t.objectStore('runs'),r=value?s.put(value,'latest'):s.get('latest');let v;r.onsuccess=()=>v=r.result;t.oncomplete=()=>{db.close();resolve(v);};t.onerror=()=>{db.close();reject(t.error);};};});}
  async function pack(){
   if(!model||!opt)return null;
@@ -15,12 +15,12 @@ export function mountVideo(ctx){
  }
  async function checkpoint(){await ctx.checkpointBoundary(true);}
  async function prepare(resume=false,supplied=null,restoreTime=true){
-  if(!ctx.getBase())throw Error('先にWebGPUを準備してください');if(!data)data=await pairedData();const s=ctx.getState();
+  if(!ctx.getBase())throw Error('先にWebGPUを準備してください');ctx.applySettings();if(!data)data=await pairedData();const s=ctx.getState();
   if(model&&!supplied&&baseUpdates&&(baseUpdates.updates2!==s.updates2||baseUpdates.updates3!==s.updates3)){reset();log('2D・3Dの重みが追加学習されたため、動画学習は更新後の重みから開始します。');}
-  if(model&&!supplied){const target=Number($('video-epochs').value);if(!Number.isInteger(target)||target<1)throw Error('動画エポックを確認してください');position.epochs=Math.max(target,position.epoch+(position.cursor>0?1:0));return;}
+  if(model&&!supplied){const target=Number($('video-epochs').value),batch=Number($('video-batch').value);if(!Number.isInteger(target)||target<1||!Number.isInteger(batch)||batch<1)throw Error('動画エポック・バッチを確認してください');position.epochs=target;position.batch=batch;position.seed=Number(ctx.manualValue('seed',position.seed||s.config.seed));return;}
   const saved=supplied||(resume?await disk():null);
   if(resume&&!saved)throw Error('動画学習の保存データがありません');if(!saved&&(!s?.updates2||!s?.updates3))throw Error('先に2D・3Dの準備学習を実行してください');
-  const next=saved?{...structuredClone(saved.position),epochs:Math.max(saved.position.epochs,epochOverride??saved.position.epochs)}:{...position,seed:s.config.seed,epochs:Number($('video-epochs').value),batch:Number($('video-batch').value)};
+  const next=saved?{...structuredClone(saved.position),epochs:Number(ctx.manualValue('video-epochs',saved.position.epochs)),batch:Number(ctx.manualValue('video-batch',saved.position.batch)),seed:Number(ctx.manualValue('seed',saved.position.seed||s.config.seed))}:{...position,seed:s.config.seed,epochs:Number($('video-epochs').value),batch:Number($('video-batch').value)};
   if(!Number.isInteger(next.epochs)||next.epochs<1||!Number.isInteger(next.batch)||next.batch<1||!Number.isInteger(next.epoch)||next.epoch<0||!Number.isInteger(next.cursor)||next.cursor<0||!Array.isArray(next.order)||next.cursor>next.order.length||next.order.some(i=>!Number.isInteger(i)||i<0||i>=data.train.length))throw Error('動画の保存位置・エポック・バッチが不正です');
   const fresh=new Video73(tf,next.seed||20261103);let freshOpt;
   try{
@@ -29,7 +29,7 @@ export function mountVideo(ctx){
   }catch(e){fresh.dispose();freshOpt?.dispose();throw e;}
   model?.dispose();opt?.dispose();model=fresh;opt=freshOpt;position=next;evaluation=saved?.evaluation||null;verified=false;baseUpdates=saved?.base_updates||{updates2:s.updates2,updates3:s.updates3};
   if(saved&&restoreTime)ctx.restoreTrainingTime(saved.training_time);
-  $('video-epochs').value=position.epochs;$('video-batch').value=position.batch;epochOverride=undefined;
+  ctx.showSetting('video-epochs',position.epochs);ctx.showSetting('video-batch',position.batch);
  }
  async function restore(saved){await prepare(true,saved,false);}
  async function verify(batch){if(verified)return;await ctx.gradients(()=>model.lossVideo(batch.frames,batch.target,batch.mask,batch.xy,batch.valid,batch.sequence,batch.sequenceMask),model.videoVars,opt,false);const bytes=await model.export(),session=await ort.InferenceSession.create(bytes,{executionProviders:['webgpu']});const frames=batch.frames.slice([0,0,0,0,0],[1,3,256,192,3]),input=frames.transpose([0,1,4,2,3]),rotation=tf.eye(3),origin=tf.zeros([1,1,3]),p=model.predictVideo(frames,rotation,origin);try{const out=await session.run({frames:new ort.Tensor('float32',await input.data(),[1,3,3,256,192]),tracking_rotation:new ort.Tensor('float32',await rotation.data(),[3,3]),tracking_origin:new ort.Tensor('float32',await origin.data(),[1,1,3])});let max=0;for(const[n,t]of [['keypoints2d',p.xy],['confidence2d',p.confidence],['vrc_relative',p.relative],['vrc_positions',p.positions]]){const a=await t.data(),b=out[n].data;if(a.length!==b.length)throw Error('動画ONNX形状不一致');for(let i=0;i<a.length;i++){if(!Number.isFinite(a[i])||!Number.isFinite(b[i]))throw Error('動画ONNX非有限値');max=Math.max(max,Math.abs(a[i]-b[i]));}}dispose(out);if(max>.002)throw Error('動画ONNX出力差 '+max);log('動画モデルの逆伝播・ONNX出力を確認: '+max.toExponential(3));verified=true;}finally{dispose(p);tf.dispose([frames,input,rotation,origin]);await session.release();}}

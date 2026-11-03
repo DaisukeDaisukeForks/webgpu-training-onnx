@@ -12,7 +12,7 @@
 <p class="subtle">累計学習時間 <span id="training-hours">0.0 時間</span></p>
 <p id="status" role="status">未学習</p><p class="subtle">必要な画像を先に取得・保存してから学習します。60秒ごとにブラウザ内へ保存し、学習30分ごとに復元用JSONを自動ダウンロードします。学習中はこのタブを開いておいてください。</p>
 <div class="actions"><button id="save" class="secondary" disabled>今すぐ保存</button><button id="backup" class="secondary" disabled>バックアップを保存</button><label class="file">バックアップを読込<input type="file" id="checkpoint-file" accept="application/json,application/gzip,.json,.gz"></label></div>
-<p id="file-backup-status" class="subtle" role="status">30分ごとに重み・学習状態のJSONを出力します。ブラウザに確認された場合は複数ファイルの自動ダウンロードを許可してください。</p><p class="subtle">バックアップを選ぶと、モデルを準備して自動で学習を再開します。回数を増やす場合は、先に上のエポック数を変更してください。学習中の読込は「停止して保存」の後に行えます。</p>
+<p id="file-backup-status" class="subtle" role="status">30分ごとに重み・学習状態のJSONを出力します。ブラウザに確認された場合は複数ファイルの自動ダウンロードを許可してください。</p><p class="subtle">バックアップを選ぶと、モデルを準備して自動で学習を再開します。読込前に手入力した設定は、ファイル内の設定より優先します。停止後もバッチ数・学習率・目標回数を変更できます。学習中の読込は「停止して保存」の後に行えます。</p>
 </section>
 <section class="panel">
 <div class="section-title"><h2>精度・ONNX保存</h2><button id="eval" class="secondary" disabled>精度を評価</button></div>
@@ -40,4 +40,4 @@
 <details class="panel"><summary>ログ・出典・ライセンス</summary><pre id="log"></pre><button id="frame-map" class="secondary" disabled>教師データの対応表を保存</button><p>ASPset-510: CC0-1.0。Aiden Nibali, Joshua Millward, Zhen He, Stuart Morgan / La Trobe University・Australian Institute of Sport。<a href="https://archive.org/details/aspset510">配布元</a>・<a href="https://github.com/anibali/aspset-510">出典・ライセンス</a></p><p>COCO-WholeBody: 研究・非商用条件、各画像の原ライセンス。Jin et al., ECCV 2020 / SenseTime Research。<a href="https://github.com/jin-s13/COCO-WholeBody">配布・利用条件</a></p><p>H3WB注釈: MIT。Copyright © 2022 H3WB 3D WholeBody Dataset Annotations。Zhu, Samet, Picard, ICCV 2023。<a href="https://github.com/wholebody3d/wholebody3d">配布・ライセンス</a></p><p>座標系: <a href="https://docs.vrchat.com/docs/osc-trackers">VRChat OSC Trackers</a></p></details>
 <p class="subtle">非商用・研究用の学習です。CMU Human Foot注釈はCC BY 4.0、画像は各COCO画像の条件に従います。<a href="https://cmu-perceptual-computing-lab.github.io/foot_keypoint_dataset/">CMU Human Foot</a></p>
 <footer>WHOLEBODY73</footer>
-</main><script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js"></script><script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-webgpu@4.22.0/dist/tf-backend-webgpu.min.js"></script><script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.22.0/dist/ort.webgpu.min.js"></script><script type="module" src="app.mjs?revision=17"></script></body></html>
+</main><script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js"></script><script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-webgpu@4.22.0/dist/tf-backend-webgpu.min.js"></script><script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.22.0/dist/ort.webgpu.min.js"></script><script type="module" src="app.mjs?revision=18"></script></body></html>
