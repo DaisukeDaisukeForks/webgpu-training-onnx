@@ -1,6 +1,22 @@
 <!doctype html>
 <html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>WholeBody73 · Inference Lab</title><link rel="stylesheet" href="style.css">
 <script type="importmap">{"imports":{"three":"https://esm.sh/three@0.170.0","three/addons/":"https://esm.sh/three@0.170.0/examples/jsm/","@pixiv/three-vrm":"https://esm.sh/@pixiv/three-vrm@3.3.0?external=three"}}</script>
-</head><body><header><div class="mark">73</div><div><small>WHOLEBODY / LOCAL INFERENCE LAB</small><h1>動画から、立体へ。</h1></div><span class="badge">端末内処理 · ファイル送信なし</span></header>
-<main><aside><h2>入力ファイル</h2><label class="file">01 <b>学習チェックポイント</b><span>JSON / JSON.GZ · 名前の指定なし</span><input id="checkpoint" type="file"></label><div id="modelStatus" class="note">チェックポイントを選択してください</div><button id="download" disabled>生成したONNXを保存 ↓</button><label class="file">02 <b>動画</b><span>ブラウザで再生できる形式</span><input id="videoFile" type="file"></label><label class="file">03 <b>VRM（任意）</b><span>VRM 0.x / 1.0</span><input id="vrmFile" type="file"></label><div id="vrmStatus" class="note">骨格のみでも表示できます</div><h2>推論・空間設定</h2><label>検出しきい値 <input id="score" type="number" value="0.45" min="0.1" max="0.95" step="0.05"></label><label>最大人数 <input id="maxPeople" type="number" value="6" min="1" max="20"></label><label>推定身長 (m) <input id="height" type="number" value="1.7" min="0.5" max="2.5" step="0.05"></label><label>水平画角 (°) <input id="fov" type="number" value="60" min="20" max="150"></label><label>関節表示しきい値 <input id="jointScore" type="number" value="0" min="0" max="1" step="0.01"></label><button id="run" disabled>推論開始</button><button id="single" disabled>現在フレームを推論</button><p class="note">奥行き：関節はモデル出力の腰基準3D。人物間の距離は身長・画角・検出枠からの概算で、実測距離ではありません。未学習の出力もそのまま表示します。</p></aside>
-<section><div class="viewhead"><h2>映像と検出結果</h2><span id="status" role="status">準備中</span></div><div class="videoWrap"><video id="video" controls playsinline></video><canvas id="overlay"></canvas><div id="empty">動画を読み込んでください</div></div><div class="viewhead"><h2>3Dトラッキング空間</h2><span>ドラッグ：回転 / ホイール：ズーム / 右ドラッグ：移動</span></div><div id="scene"></div><div class="legend"><span>床グリッド：1m</span><span>カメラ：原点・−Z方向</span><span>色：人物ID</span></div><div id="people"></div><pre id="error" role="alert"></pre></section></main><footer>モデル変換・推論・動画・VRMはブラウザ内で処理します。初回は実行ライブラリと人物検出モデルをCDNから取得します。VRMは人物ごとに複製し、身体の主要ボーンを動かします。</footer><script type="module" src="app.mjs"></script></body></html>
+</head><body>
+<header><div class="mark">73</div><div><small>WHOLEBODY / LOCAL INFERENCE LAB</small><h1>動画から、立体へ。</h1></div><span class="badge">端末内処理 · ファイル送信なし</span></header>
+<main><aside><h2>入力ファイル</h2>
+<label class="file">01 <b>学習チェックポイント</b><span>JSON / JSON.GZ</span><input id="checkpoint" type="file"></label>
+<div id="modelStatus" class="note">チェックポイントを選択してください</div><button id="download" disabled>生成したONNXを保存 ↓</button>
+<label class="file">02 <b>動画</b><span>ブラウザで再生できる形式</span><input id="videoFile" type="file"></label>
+<label class="file">03 <b>VRM（任意）</b><span>VRM 0.x / 1.0</span><input id="vrmFile" type="file"></label><div id="vrmStatus" class="note">骨格のみでも表示できます</div>
+<h2>推論・空間設定</h2>
+<label>表示距離 (m) <input id="distance" type="number" value="3" min="0.1" max="30" step="0.1"></label>
+<label>水平画角 (°) <input id="fov" type="number" value="60" min="20" max="150"></label>
+<label>関節表示しきい値 <input id="jointScore" type="number" value="0" min="0" max="1" step="0.01"></label>
+<button id="run" disabled>推論開始</button><button id="single" disabled>現在フレームを推論</button>
+</aside>
+<section><div class="viewhead"><h2>映像と推論結果</h2><span id="status" role="status">準備中</span></div>
+<div class="videoWrap"><video id="video" controls playsinline></video><canvas id="overlay"></canvas><div id="empty">動画を読み込んでください</div></div>
+<details class="inputPreview"><summary>入力プレビュー</summary><canvas id="modelInput" width="192" height="256"></canvas></details>
+<div class="viewhead"><h2>3D表示</h2><span>ドラッグ：回転 / ホイール：ズーム / 右ドラッグ：移動</span></div><div id="scene"></div>
+<div class="legend"><span>床グリッド：1m</span></div><div id="people"></div><pre id="error" role="alert"></pre></section></main>
+<script type="module" src="app.mjs"></script></body></html>
