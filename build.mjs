@@ -23,7 +23,7 @@ for(const entry of fs.readdirSync(publicDir,{recursive:true,withFileTypes:true})
  else fs.copyFileSync(from,to);
 }
 fs.mkdirSync(path.join(dist,'.openai'),{recursive:true});fs.copyFileSync(path.join(root,'.openai/hosting.json'),path.join(dist,'.openai/hosting.json'));
-const rows=['coco-train','coco-val','cmu-foot-train','cmu-foot-val'].flatMap(name=>JSON.parse(fs.readFileSync(path.join(publicDir,name+'.json'),'utf8')).rows),allowed=[...new Set(rows.map(r=>`${r.split}/${r.id}`))];
+const rows=['coco-train','coco-extra-train-0','coco-extra-train-1','coco-val','cmu-foot-train','cmu-foot-val'].flatMap(name=>JSON.parse(fs.readFileSync(path.join(publicDir,name+'.json'),'utf8')).rows),allowed=[...new Set(rows.map(r=>`${r.split}/${r.id}`))];
 const sourceAssets=JSON.parse(fs.readFileSync(path.join(root,'config/source-assets.json'),'utf8'));
 fs.writeFileSync(path.join(dist,'server/index.js'),fs.readFileSync(path.join(root,'worker/index.mjs'),'utf8')+`\nexport default handler(new Set(${JSON.stringify(allowed)}),${JSON.stringify(sourceAssets)});\n`);
 console.log(JSON.stringify({images:allowed.length,annotations:rows.length,teacherFiles:Object.keys(teachers).length}));

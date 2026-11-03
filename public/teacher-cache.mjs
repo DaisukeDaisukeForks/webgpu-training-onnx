@@ -1,5 +1,5 @@
 import {prefetchAll} from './prefetch.mjs?revision=8';
-import {TEACHERS} from './teacher-index.mjs?revision=12';
+import {TEACHERS} from './teacher-index.mjs?revision=17';
 export {TEACHERS};
 export class TeacherCache{
  constructor(){this.pending=new Map();this.memory=new Map();this.saved=new Set();this.stats={hits:0,downloads:0,bytes:0,stored:0};this.notice=()=>{};}

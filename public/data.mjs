@@ -1,5 +1,5 @@
 import {Dataset,rng,shuffle} from './cache.mjs?revision=8';
-import {teachers} from './teacher-cache.mjs?revision=12';
+import {teachers} from './teacher-cache.mjs?revision=17';
 import {occlusionPlan,drawOcclusion} from './augmentation.mjs?revision=11';
 import {AistData} from './aist.mjs?revision=12';
 export {Dataset,rng,shuffle};

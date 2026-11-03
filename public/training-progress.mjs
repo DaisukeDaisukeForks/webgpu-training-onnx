@@ -11,7 +11,7 @@ export function rememberPosition(state) {
     state.calibrationUpdates = state.phase >= 2 ? state.updates2 : null;
   }
   if (state.phaseProgress[state.phase]) {
-    state.phaseProgress[state.phase] = {epoch: state.epoch, cursor: state.cursor, order: state.order};
+    state.phaseProgress[state.phase] = {epoch: state.epoch, cursor: state.cursor, order: state.order, learningRate: state.epochLearningRate};
   }
 }
 
@@ -44,5 +44,6 @@ export function selectNextPhase(state) {
   state.epoch = position?.epoch ?? 0;
   state.cursor = position?.cursor ?? 0;
   state.order = position?.order ?? [];
+  state.epochLearningRate = position?.learningRate;
   return resetCalibration;
 }

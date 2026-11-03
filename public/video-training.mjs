@@ -1,4 +1,4 @@
-import {teachers} from './teacher-cache.mjs?revision=12';
+import {teachers} from './teacher-cache.mjs?revision=17';
 import {rng} from './cache.mjs?revision=8';
 import {occlusionPlan,drawOcclusion} from './augmentation.mjs?revision=11';
 export async function pairedData(){const m=await teachers.json('paired.json');const windows={};for(const split of ['train','val'])windows[split]=m[split].flatMap(c=>c.frames.slice(2).map((_,i)=>({clip:c.id,frames:c.frames.slice(i,i+3)})));return{manifest:m,...windows};}
