@@ -1,0 +1,1 @@
+{"name":"wholebody73-scratch","private":true,"type":"module","scripts":{"data:prepare":"python tools/prepare-all.py","data:verify":"node tools/verify-data.mjs","build":"node build.mjs"}}

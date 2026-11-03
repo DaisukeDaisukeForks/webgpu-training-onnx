@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>WholeBody73 · 学習</title><link rel="stylesheet" href="style.css"></head>
+<body><main>
+<header><div class="brand">WHOLEBODY<span>73</span><small>TRAIN → VRCHAT</small></div><span class="badge" id="gpu">WebGPU未初期化</span></header>
+<section class="intro"><p class="eyebrow">ブラウザでモデル学習</p><h1>学習して、<br><span>ONNXを保存。</span></h1><p>73点の画像認識と、VRC用の3D推定をゼロから学習します。</p><div class="stats"><div><b>10,000</b><span>学習画像</span></div><div><b>302,262</b><span>3D教師データ</span></div><div><b>73</b><span>身体・指・足・顔</span></div></div></section>
+<section class="panel">
+<div class="section-title"><h2>学習</h2><span>WebGPU</span></div>
+<div class="settings"><label>2Dエポック<input id="ep2" type="number" value="20" min="1"></label><label>3D準備エポック<input id="warm" type="number" value="30" min="1"></label><label>3D仕上げエポック<input id="ep3" type="number" value="30" min="1"></label><label>画像バッチ<input id="bs2" type="number" value="8" min="1"></label><label>3Dバッチ<input id="bs3" type="number" value="128" min="1"></label><label>2D学習率<input id="lr2" type="number" value="0.001" min="0.0000001" step="0.0001"></label><label>3D学習率<input id="lr3" type="number" value="0.001" min="0.0000001" step="0.0001"></label><label>乱数Seed<input id="seed" type="number" value="20261103" min="1"></label></div>
+<div class="actions"><button id="init">WebGPUを準備</button><button id="start" disabled>学習を開始</button><button id="stop" class="secondary" disabled>停止して保存</button><button id="resume" class="secondary" disabled>保存した学習を再開</button></div>
+<div class="progress-block" aria-live="polite"><div><strong id="phase">準備待ち</strong><span id="percent">0%</span></div><progress id="progress" value="0" max="1"></progress><div class="progress-meta"><span id="detail">WebGPUを準備してください</span><span id="eta">—</span></div></div>
+<div class="metrics"><div><span>損失</span><b id="loss">—</b></div><div><span>処理速度</span><b id="speed">—</b></div><div><span>学習更新数 / 2D・3D</span><b id="updates">0 / 0</b></div><div><span>保存済み画像</span><b id="cached">0</b></div></div>
+<p id="status" role="status">未学習</p><p class="subtle">60秒ごとに自動保存します。学習中はこのタブを開いておいてください。</p>
+<div class="actions"><button id="save" class="secondary" disabled>今すぐ保存</button><button id="backup" class="secondary" disabled>バックアップを保存</button><label class="file">バックアップを読込<input type="file" id="checkpoint-file" accept="application/json,application/gzip,.json,.gz"></label></div>
+</section>
+<section class="panel">
+<div class="section-title"><h2>精度・ONNX保存</h2><button id="eval" class="secondary" disabled>精度を評価</button></div>
+<div class="table-wrap"><table><thead><tr><th>部位</th><th>2D PCK@0.05</th><th>3D誤差 / mm</th><th>3D評価点数</th></tr></thead><tbody id="quality"><tr><td colspan="4">未評価</td></tr></tbody></table></div>
+<p class="subtle">検証画像256枚、H3WB 20,000件、ASPset 46,317件で評価。3Dの値は、正解2D座標を入力した場合の誤差です。</p><p id="gate">未評価</p>
+<div class="actions"><button id="export" disabled>ONNXを保存</button><button id="manifest" class="secondary" disabled>学習結果を保存</button></div>
+</section>
+<section class="panel">
+<div class="section-title"><h2>動画の学習・推定</h2><span>3フレーム入力</span></div>
+<div class="settings"><label>動画エポック<input id="video-epochs" type="number" min="1" value="30"></label><label>動画バッチ<input id="video-batch" type="number" min="1" value="1"></label></div>
+<div class="actions"><button id="train-video">動画学習を開始</button><button id="resume-video" class="secondary">動画学習を再開</button><button id="backup-video" class="secondary">動画学習のバックアップ</button></div>
+<p class="subtle">準備学習の後、自動で動画学習へ進みます。直接の画像・3D対応教師は身体12点です。</p><p id="video-quality">動画の3D精度: 未評価</p>
+<label class="file">人物を中心に切り抜いた動画<input id="video-file" type="file" accept="video/*"></label><button id="infer-video">動画を推定</button>
+</section>
+<section class="panel">
+<div class="section-title"><h2>画像を試す</h2><span>VRC用3D座標 / m</span></div>
+<div class="settings"><label>原点X / m<input id="ox" type="number" value="0" step="0.01"></label><label>原点Y / m<input id="oy" type="number" value="1" step="0.01"></label><label>原点Z / m<input id="oz" type="number" value="0" step="0.01"></label><label>カメラからの向き / 度<input id="yaw" type="number" value="0" step="1"></label></div>
+<label class="file">人物画像を選択<input type="file" id="picture" accept="image/*"></label><p class="subtle">人物が大きく収まる縦長3:4の画像を使用します。</p>
+<canvas id="view" width="960" height="400" aria-label="3D姿勢"></canvas><div class="actions"><button id="infer" disabled>推定する</button><button id="positions" class="secondary" disabled>座標を保存</button></div><details><summary>推定座標</summary><pre id="coords">未推定</pre></details>
+</section>
+<section class="panel">
+<div class="section-title"><h2>Hugging Faceへ公開</h2></div><div class="settings"><label>公開先 owner/model-name<input id="hf-repo" type="text" placeholder="owner/wholebody73-vrc"></label><label>書込トークン<input id="hf-token" type="password" autocomplete="off" placeholder="hf_..."></label></div>
+<p class="subtle">指定先へ学習済みモデルを公開します。同名ファイルは更新されます。トークンは保存しません。</p><button id="publish" disabled>公開する</button><p id="published"></p>
+</section>
+<details class="panel"><summary>ログ・出典・ライセンス</summary><pre id="log"></pre><button id="frame-map" class="secondary" disabled>教師データの対応表を保存</button><p>ASPset-510: CC0-1.0。Aiden Nibali, Joshua Millward, Zhen He, Stuart Morgan / La Trobe University・Australian Institute of Sport。<a href="https://archive.org/details/aspset510">配布元</a>・<a href="https://github.com/anibali/aspset-510">出典・ライセンス</a></p><p>COCO-WholeBody: 研究・非商用条件、各画像の原ライセンス。Jin et al., ECCV 2020 / SenseTime Research。<a href="https://github.com/jin-s13/COCO-WholeBody">配布・利用条件</a></p><p>H3WB注釈: MIT。Copyright © 2022 H3WB 3D WholeBody Dataset Annotations。Zhu, Samet, Picard, ICCV 2023。<a href="https://github.com/wholebody3d/wholebody3d">配布・ライセンス</a></p><p>座標系: <a href="https://docs.vrchat.com/docs/osc-trackers">VRChat OSC Trackers</a></p></details>
+<footer>WHOLEBODY73</footer>
+</main><script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js"></script><script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-webgpu@4.22.0/dist/tf-backend-webgpu.min.js"></script><script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.22.0/dist/ort.webgpu.min.js"></script><script type="module" src="app.mjs?revision=7"></script></body></html>

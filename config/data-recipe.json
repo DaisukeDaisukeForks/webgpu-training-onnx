@@ -1,0 +1,26 @@
+{
+  "seed": 20261103,
+  "paired_clips": [
+    "04ac-0003-left",
+    "04ac-0003-mid",
+    "04ac-0003-right",
+    "04ac-0006-left",
+    "04ac-0006-mid",
+    "04ac-0006-right",
+    "04ac-0008-left",
+    "04ac-0008-mid",
+    "04ac-0008-right",
+    "04ac-0009-left",
+    "04ac-0009-mid",
+    "04ac-0009-right",
+    "04ac-0010-left",
+    "04ac-0010-mid",
+    "04ac-0010-right",
+    "04ac-0011-left"
+  ],
+  "ffmpeg": "6.1.1",
+  "python": "3.12",
+  "numpy": "2.3.5",
+  "pillow": "12.3.0",
+  "aspset_prefix_limit_bytes": 943718400
+}
