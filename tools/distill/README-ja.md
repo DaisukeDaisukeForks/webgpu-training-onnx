@@ -2,6 +2,7 @@
 公式RTMW3Dの学習済み重みを教師にして、別の軽量モデルをブラウザで学習する。教師の重みを35点へ切り詰める処理ではない。学習対象は37点、学生モデルは1,039,909パラメータ。教師生成・逆伝播・Adam・軽量モデル推論はWebGPUで実行する。GitHub Actionsは追加しない。
 ## 起動
 公開ページの `/distill.html` を開く。元のWB73学習ページとチェックポイントは変更しない。
+推論ランタイムはjsDelivrの `onnxruntime-web@1.27.0/dist/ort.webgpu.min.mjs` を使用し、WASMローダーとWASM本体も同じバージョンへ固定する。Hugging Faceの `text/plain` 配信URLをJavaScriptモジュールとして直接importしない。プレビューは専用ID `distill-preview` を使い、既存ページの全画面 `#overlay` と分離する。
 既に持っている `rtmw3d-x-fp32.onnx` または `rtmw3d-l-fp32.onnx` を選び「WebGPUを準備」を押す。RabbitDaisuke/rtmw3d-webgpu-onnx の133点版は、内部の `simcc_x/y/z` をブラウザ内で出力へ戻すため、Pythonなしで蒸留できる。変換で重みは変更しない。FP32教師を使用する。出力名・形状の異なるONNXは受け付けない。
 公式 `.pth` から新規に教師ONNXを作る場合は、次節の一度だけの変換を行う。教師を変更すると保存分布との整合が崩れるため、チェックポイントと異なるSHA-256の教師は混ぜない。
 ## 公式のモデル定義・重みから変換

@@ -20,7 +20,7 @@ async function pack(){elapsed();const adam=await readAdam(optimizer);return{form
 async function save(file=false){const p=await pack();await disk(db,'state','put','latest',p);lastSave=performance.now();if(file){download(`rtmw3d-distill37-${new Date().toISOString().replace(/[:.]/g,'-')}.json`,JSON.stringify(p),'application/json');lastFile=state.milliseconds;backupPending=false;}}
 async function runtime(){
   if(!navigator.gpu)throw Error('WebGPU対応ブラウザで開いてください');
-  if(!ort){const base='https://huggingface.co/RabbitDaisuke/rtmw3d-webgpu-onnx/resolve/main/runtime/';ort=await import(base+'ort.all.min.mjs');ort.env.wasm.wasmPaths=base;ort.env.wasm.numThreads=1;}
+  if(!ort){const base='https://cdn.jsdelivr.net/npm/onnxruntime-web@1.27.0/dist/';ort=await import(base+'ort.webgpu.min.mjs');ort.env.wasm.wasmPaths=base;ort.env.wasm.numThreads=1;}
   if(!await tf.setBackend('webgpu'))throw Error('WebGPU学習を初期化できません');await tf.ready();
   db??=await openStore();if(!model){const c=config();state.rng=c.seed;model=new Student37(tf,c.seed);optimizer=tf.train.adam(c.lr);log(`軽量モデル ${model.vars.reduce((s,t)=>s+t.size,0).toLocaleString()} パラメータ / 37点`);}
 }
@@ -87,7 +87,7 @@ async function restore(p){
   model.dispose();optimizer.dispose();model=next;optimizer=opt;state=structuredClone(p.state);
   for(const k of fields)if(!dirty.has(k))$(k).value=p.config[k];lastFile=state.milliseconds;await counts();status(`${state.epoch} epoch / ${state.updates}更新から復元しました`);
 }
-function draw(canvas,points,teacherMode=false){const view=$('overlay'),c=view.getContext('2d');view.width=576;view.height=768;c.drawImage(canvas,0,0,576,768);const sx=teacherMode?2:3,sy=teacherMode?2:3,p=teacherMode?IDS.map(i=>[points[i*3]*sx,points[i*3+1]*sy]):Array.from({length:K},(_,i)=>[points[i*3]*sx,points[i*3+1]*sy]);c.lineWidth=2;for(const[a,b]of EDGES){c.strokeStyle=a>=15&&b>=15?'#ffcb55':'#80d9ff';c.beginPath();c.moveTo(...p[a]);c.lineTo(...p[b]);c.stroke();}p.forEach(([x,y],i)=>{c.fillStyle=i>=17&&i<23?'#ffcb55':'#a6e77c';c.beginPath();c.arc(x,y,3,0,Math.PI*2);c.fill();});}
+function draw(canvas,points,teacherMode=false){const view=$('distill-preview'),c=view.getContext('2d');view.width=576;view.height=768;c.drawImage(canvas,0,0,576,768);const sx=teacherMode?2:3,sy=teacherMode?2:3,p=teacherMode?IDS.map(i=>[points[i*3]*sx,points[i*3+1]*sy]):Array.from({length:K},(_,i)=>[points[i*3]*sx,points[i*3+1]*sy]);c.lineWidth=2;for(const[a,b]of EDGES){c.strokeStyle=a>=15&&b>=15?'#ffcb55':'#80d9ff';c.beginPath();c.moveTo(...p[a]);c.lineTo(...p[b]);c.stroke();}p.forEach(([x,y],i)=>{c.fillStyle=i>=17&&i<23?'#ffcb55':'#a6e77c';c.beginPath();c.arc(x,y,3,0,Math.PI*2);c.fill();});view.hidden=false;}
 function inputCrop(){const image=sourceImage||($('video').readyState>=2?$('video'):null);if(!image)throw Error('画像または動画を選んでください');return personCrop(image,roi(image)).canvas;}
 async function infer(){
   const canvas=inputCrop(),c=new OffscreenCanvas(192,256);c.getContext('2d').drawImage(canvas,0,0,192,256);const image=tf.tidy(()=>tf.browser.fromPixels(c).toFloat().div(255).expandDims(0));let out;

@@ -9,4 +9,6 @@ input::file-selector-button,button{background:#a9ef86;color:#102016;border:1px s
 button:disabled{background:#283b45;color:#b2c1c9;border-color:#526671;opacity:1!important}
 a{color:#b1ef91}
 progress{accent-color:#a9ef86}
+#distill-preview{position:static;display:block;width:min(100%,384px);height:auto;max-width:100%;aspect-ratio:3/4;touch-action:auto;cursor:default}
+#distill-preview[hidden]{display:none}
 :focus-visible{outline:3px solid #8bdcff;outline-offset:3px}
