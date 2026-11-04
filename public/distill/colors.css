@@ -1,0 +1,12 @@
+:root{color-scheme:dark}
+html,body{background:#0c1317;color:#eaf1f2}
+body{margin:0;font:15px/1.7 system-ui,sans-serif}
+h1,h2,p,pre,.result{color:#eaf1f2}
+label,small{color:#bacbd2}
+input,select,textarea{box-sizing:border-box;background:#0c1317;color:#f2f7f8;border:1px solid #566c77;border-radius:7px;padding:10px;font:inherit}
+input::placeholder{color:#a9bbc4;opacity:1}
+input::file-selector-button,button{background:#a9ef86;color:#102016;border:1px solid #a9ef86;border-radius:7px;padding:10px 14px;font:inherit;font-weight:650}
+button:disabled{background:#283b45;color:#b2c1c9;border-color:#526671;opacity:1!important}
+a{color:#b1ef91}
+progress{accent-color:#a9ef86}
+:focus-visible{outline:3px solid #8bdcff;outline-offset:3px}
