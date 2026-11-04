@@ -5,3 +5,9 @@ node_modules/
 .venv-teacher/
 teacher-upstream/
 teacher/
+.venv-prune/
+pruned37-output/
+pruned37-finetuned/
+distill-output/
+distill-data/
+__pycache__/
