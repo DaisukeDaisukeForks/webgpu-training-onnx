@@ -1,0 +1,4 @@
+// Separate additive storage. Never clears existing WB73 images or teachers.
+export async function openStore(){return new Promise((resolve,reject)=>{const r=indexedDB.open('rtmw3d-distill37',1);r.onupgradeneeded=()=>{r.result.createObjectStore('samples');r.result.createObjectStore('state');};r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});}
+export function disk(db,store,mode,key,value){return new Promise((resolve,reject)=>{const tx=db.transaction(store,mode==='put'?'readwrite':'readonly'),s=tx.objectStore(store);const r=mode==='put'?s.put(value,key):mode==='keys'?s.getAllKeys():s.get(key);let result;r.onsuccess=()=>{result=r.result;};tx.oncomplete=()=>resolve(result);tx.onabort=()=>reject(tx.error||Error('保存が中断されました'));tx.onerror=()=>reject(tx.error);});}
+export async function keysFor(db,teacher){return(await disk(db,'samples','keys')).filter(k=>k.startsWith(teacher+':'));}
